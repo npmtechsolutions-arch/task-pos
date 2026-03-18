@@ -80,7 +80,7 @@ export function MyTasksWidget({ limit = 5 }: MyTasksWidgetProps) {
   
   // Get tasks assigned to current user, sorted by due date
   const myTasks = tasks
-    .filter((task) => task.assigneeId === user?.id && task.status !== 'done')
+    .filter((task) => task.primaryAssigneeId === user?.id && task.status !== 'done')
     .sort((a, b) => {
       // Sort by due date (nulls last), then by priority
       if (a.dueDate && b.dueDate) {

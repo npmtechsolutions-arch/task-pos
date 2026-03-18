@@ -98,6 +98,21 @@ async def global_exception_handler(request, exc):
     )
 
 
+from fastapi import WebSocket, WebSocketDisconnect
+from app.websocket.manager import manager
+
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(websocket, client_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # For now, we only push data from the server, client just listens
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, client_id)
+
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

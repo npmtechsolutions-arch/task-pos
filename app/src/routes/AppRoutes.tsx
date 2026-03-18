@@ -9,41 +9,39 @@ import { ProjectDetail } from '@/pages/projects/ProjectDetail';
 import { TasksList } from '@/pages/tasks/TasksList';
 import { LandingPage } from '@/pages/landing/LandingPage';
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
+import TimesheetsPage from '@/pages/timesheets/Timesheets';
+import { TaskDetail } from '@/pages/tasks/TaskDetail';
 
-// Protected Route wrapper
+// ─── Protected Route ──────────────────────────────────────────────────────
+// If not authenticated, redirects to /login (not landing)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
-
   if (!isAuthenticated) {
-    return <Navigate to="/landing" replace />;
+    return <Navigate to="/login" replace />;
   }
-
   return <>{children}</>;
 }
 
-// Public Route wrapper (redirects to dashboard if already authenticated)
+// ─── Public Route ─────────────────────────────────────────────────────────
+// If already authenticated, redirects to /dashboard
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
-
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
-
   return <>{children}</>;
 }
 
 export function AppRoutes() {
   return (
     <Routes>
-      {/* Public Routes */}
-      <Route
-        path="/landing"
-        element={
-          <PublicRoute>
-            <LandingPage />
-          </PublicRoute>
-        }
-      />
+      {/* ── Public Routes ── */}
+
+      {/* Landing — the entry point of the app */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
+
+      {/* Login / Register — blocked if already authenticated */}
       <Route
         path="/login"
         element={
@@ -61,31 +59,106 @@ export function AppRoutes() {
         }
       />
 
-      {/* Protected Routes */}
+      {/* ── Protected Routes (require authentication) ── */}
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <AppLayout />
           </ProtectedRoute>
         }
       >
+        {/* Dashboard is the default sub-route */}
         <Route index element={<Dashboard />} />
         <Route path="admin" element={<AdminDashboard />} />
-        <Route path="projects" element={<ProjectsList />} />
-        <Route path="projects/:projectId" element={<ProjectDetail />} />
-        <Route path="tasks" element={<TasksList />} />
-        <Route path="tasks/:taskId" element={<div>Task Detail (Coming Soon)</div>} />
-        <Route path="team" element={<div>Team (Coming Soon)</div>} />
-        <Route path="calendar" element={<div>Calendar (Coming Soon)</div>} />
-        <Route path="reports" element={<div>Reports (Coming Soon)</div>} />
-        <Route path="settings" element={<div>Settings (Coming Soon)</div>} />
-        <Route path="settings/profile" element={<div>Profile Settings (Coming Soon)</div>} />
-        <Route path="settings/organization" element={<div>Organization Settings (Coming Soon)</div>} />
-        <Route path="settings/notifications" element={<div>Notification Settings (Coming Soon)</div>} />
       </Route>
 
-      {/* Catch all */}
+      {/* Projects */}
+      <Route
+        path="/projects"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ProjectsList />} />
+        <Route path=":projectId" element={<ProjectDetail />} />
+      </Route>
+
+      {/* Tasks */}
+      <Route
+        path="/tasks"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<TasksList />} />
+        <Route path=":taskId" element={<TaskDetail />} />
+      </Route>
+
+      {/* Other protected pages */}
+      <Route
+        path="/timesheets"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<TimesheetsPage />} />
+      </Route>
+
+      <Route
+        path="/team"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<div className="p-6 text-gray-500">Team page coming soon...</div>} />
+      </Route>
+
+      <Route
+        path="/calendar"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<div className="p-6 text-gray-500">Calendar coming soon...</div>} />
+      </Route>
+
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<div className="p-6 text-gray-500">Reports coming soon...</div>} />
+      </Route>
+
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<div className="p-6 text-gray-500">Settings coming soon...</div>} />
+        <Route path="profile" element={<div className="p-6 text-gray-500">Profile Settings coming soon...</div>} />
+        <Route path="organization" element={<div className="p-6 text-gray-500">Organization Settings coming soon...</div>} />
+        <Route path="notifications" element={<div className="p-6 text-gray-500">Notification Settings coming soon...</div>} />
+      </Route>
+
+      {/* Catch-all → back to landing */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

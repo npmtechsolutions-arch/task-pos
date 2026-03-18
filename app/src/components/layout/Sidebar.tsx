@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Plus
+  Plus,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUIStore, useProjectStore } from '@/stores';
@@ -34,16 +35,17 @@ import {
 import { ProjectForm } from '@/components/projects/ProjectForm';
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
+  { name: 'Timesheets', href: '/timesheets', icon: Clock },
   { name: 'Team', href: '/team', icon: Users },
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
 ];
 
 const bottomNavigation = [
-  { name: 'Landing Admin', href: '/admin', icon: LayoutDashboard },
+  { name: 'Landing Admin', href: '/dashboard/admin', icon: LayoutDashboard },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -51,12 +53,18 @@ export function Sidebar() {
   const location = useLocation();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const { user, logout } = useAuthStore();
+  const navigate = useNavigate();
   const { projects } = useProjectStore();
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   const isActive = (href: string) => {
-    if (href === '/') {
-      return location.pathname === '/';
+    if (href === '/dashboard') {
+      return location.pathname === '/dashboard' || location.pathname === '/dashboard/';
     }
     return location.pathname.startsWith(href);
   };
@@ -71,7 +79,7 @@ export function Sidebar() {
       >
         {/* Logo */}
         <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
               <FolderKanban className="w-5 h-5 text-white" />
             </div>
@@ -223,7 +231,7 @@ export function Sidebar() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={logout}
+                   onClick={handleLogout}
                     className="flex items-center justify-center w-full p-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
                   >
                     <Avatar className="w-8 h-8">
@@ -255,7 +263,7 @@ export function Sidebar() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="text-gray-400 hover:text-white hover:bg-gray-800"
                 >
                   <LogOut className="w-4 h-4" />

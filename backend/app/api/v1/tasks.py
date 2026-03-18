@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.core.logging import get_logger
 from app.models.project import ProjectMemberRole
-from app.models.task import TaskPriority, TaskStatus
+from app.models.task import Task, TaskComment, TaskPriority, TaskStatus
 from app.schemas.task import (
     TaskBatchUpdateRequest,
     TaskCommentCreate,
@@ -28,6 +28,7 @@ from app.schemas.task import (
 )
 from app.services.project import ProjectService
 from app.services.task import TaskService
+from app.services.time_tracking import TimeTrackingService
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -38,7 +39,7 @@ async def list_tasks(
     project_id: Optional[str] = Query(None),
     status: Optional[TaskStatus] = Query(None),
     priority: Optional[TaskPriority] = Query(None),
-    assignee_id: Optional[str] = Query(None),
+    primary_assignee_id: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -50,7 +51,7 @@ async def list_tasks(
         project_id=project_id,
         status=status,
         priority=priority,
-        assignee_id=assignee_id,
+        primary_assignee_id=primary_assignee_id,
         search=search,
         page=page,
         per_page=per_page,
@@ -514,3 +515,23 @@ async def remove_dependency(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Dependency not found",
         )
+@router.post("/{task_id}/log-time")
+async def log_task_time(
+    task_id: str,
+    hours: float,
+    description: Optional[str] = None,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Log time against a task."""
+    try:
+        service = TimeTrackingService(db)
+        entry = await service.log_time(
+            task_id=task_id,
+            user_id=current_user.id,
+            duration_minutes=int(hours * 60),
+            description=description or ""
+        )
+        return entry
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

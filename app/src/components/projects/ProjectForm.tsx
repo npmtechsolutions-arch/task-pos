@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, DollarSign, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useProjectStore, useAuthStore, useUIStore } from '@/stores';
+import { useProjectStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,11 +27,19 @@ import { PROJECT_VISIBILITIES } from '@/lib/constants';
 
 const projectSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(200, 'Name is too long'),
-  key: z.string().min(2, 'Key must be at least 2 characters').max(10, 'Key is too long'),
+  key: z
+    .string()
+    .min(2, 'Key must be at least 2 characters')
+    .max(20, 'Key is too long')
+    .regex(/^[A-Za-z0-9_-]+$/, 'Only letters, numbers, - and _ allowed'),
   description: z.string().optional(),
   visibility: z.enum(['private', 'internal', 'public']),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  // Keep as string in the form, convert manually on submit
+  budget: z.string().optional(),
+  department: z.string().max(100).optional(),
+  businessUnit: z.string().max(100).optional(),
 });
 
 type ProjectFormData = z.infer<typeof projectSchema>;
@@ -41,8 +49,7 @@ interface ProjectFormProps {
 }
 
 export function ProjectForm({ onSuccess }: ProjectFormProps) {
-  const { addProject } = useProjectStore();
-  const { user } = useAuthStore();
+  const { createProject } = useProjectStore();
   const { addToast } = useUIStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -62,13 +69,14 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
   const startDate = watch('startDate');
   const endDate = watch('endDate');
 
-  // Auto-generate key from name
+  // Auto-generate key from name (only if key not yet typed)
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    register('name').onChange(e);
     const name = e.target.value;
     if (name && !watch('key')) {
       const key = name
         .split(' ')
-        .map(word => word[0])
+        .map((word) => word[0])
         .join('')
         .toUpperCase()
         .slice(0, 5);
@@ -78,53 +86,31 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
 
   const onSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
-    
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Create new project
-      const newProject = {
-        id: `p${Date.now()}`,
+      const budgetVal = data.budget ? parseFloat(data.budget as unknown as string) : null;
+      await createProject({
         name: data.name,
         key: data.key.toUpperCase(),
         description: data.description,
-        status: 'active' as const,
         visibility: data.visibility,
-        owner: user!,
-        members: [{
-          id: '1',
-          user: user!,
-          role: 'owner' as const,
-          joinedAt: new Date().toISOString(),
-        }],
-        settings: {
-          issueTypes: [],
-          priorities: [],
-          statuses: [],
-        },
-        progress: 0,
-        taskCount: 0,
-        completedTaskCount: 0,
-        startDate: data.startDate?.toISOString(),
-        endDate: data.endDate?.toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      addProject(newProject as any);
-      
+        start_date: data.startDate ? format(data.startDate, 'yyyy-MM-dd') : null,
+        end_date: data.endDate ? format(data.endDate, 'yyyy-MM-dd') : null,
+        budget: budgetVal,
+        department: data.department || null,
+        business_unit: data.businessUnit || null,
+      });
+
       addToast({
         type: 'success',
         title: 'Project created successfully',
+        message: `${data.name} has been added to PostgreSQL.`,
       });
-      
       onSuccess?.();
     } catch (error) {
       addToast({
         type: 'error',
         title: 'Failed to create project',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
       });
     } finally {
       setIsSubmitting(false);
@@ -140,10 +126,7 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
           id="name"
           placeholder="Enter project name"
           {...register('name')}
-          onChange={(e) => {
-            register('name').onChange(e);
-            handleNameChange(e);
-          }}
+          onChange={handleNameChange}
           className={cn(errors.name && 'border-red-500')}
         />
         {errors.name && (
@@ -159,13 +142,13 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
           placeholder="e.g., PROJ"
           {...register('key')}
           className={cn(errors.key && 'border-red-500', 'uppercase')}
-          maxLength={10}
+          maxLength={20}
         />
         {errors.key && (
           <p className="text-sm text-red-500">{errors.key.message}</p>
         )}
         <p className="text-xs text-gray-500">
-          A short identifier for your project (2-10 characters)
+          Unique identifier for your project (2–20 characters). Auto-generated from name.
         </p>
       </div>
 
@@ -261,17 +244,69 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
         </div>
       </div>
 
+      {/* Budget & Department */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="budget" className="flex items-center gap-1">
+            <DollarSign className="w-3.5 h-3.5 text-green-500" /> Budget
+          </Label>
+          <Input
+            id="budget"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            {...register('budget')}
+            className={cn(errors.budget && 'border-red-500')}
+          />
+          {errors.budget && (
+            <p className="text-sm text-red-500">{errors.budget.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="department" className="flex items-center gap-1">
+            <Building2 className="w-3.5 h-3.5 text-blue-500" /> Department
+          </Label>
+          <Input
+            id="department"
+            placeholder="e.g., Engineering"
+            {...register('department')}
+          />
+        </div>
+      </div>
+
+      {/* Business Unit */}
+      <div className="space-y-2">
+        <Label htmlFor="businessUnit">Business Unit</Label>
+        <Input
+          id="businessUnit"
+          placeholder="e.g., Product"
+          {...register('businessUnit')}
+        />
+      </div>
+
       {/* Submit Buttons */}
-      <div className="flex justify-end gap-3 pt-4">
+      <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
         <Button type="button" variant="outline" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button 
-          type="submit" 
+        <Button
+          type="submit"
           className="bg-blue-600 hover:bg-blue-700"
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'Creating...' : 'Create Project'}
+          {isSubmitting ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Creating…
+            </span>
+          ) : (
+            'Create Project'
+          )}
         </Button>
       </div>
     </form>

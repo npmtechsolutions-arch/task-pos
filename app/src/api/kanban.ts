@@ -33,8 +33,8 @@ export interface KanbanTaskCard {
   position: number;
   boardColumnId?: string;
   projectId: string;
-  assigneeId?: string;
-  assignee?: KanbanAssignee;
+  primaryAssigneeId?: string;
+  primaryAssignee?: KanbanAssignee;
   labels: KanbanLabel[];
   dueDate?: string;
   estimatedHours?: number;
@@ -109,7 +109,7 @@ export const kanbanApi = {
           boardColumnId: task.board_column_id,
           taskType: task.task_type,
           projectId: task.project_id,
-          assigneeId: task.assignee_id,
+          primaryAssigneeId: task.primary_assignee_id,
           dueDate: task.due_date,
           estimatedHours: task.estimated_hours,
           actualHours: task.actual_hours,
@@ -118,7 +118,7 @@ export const kanbanApi = {
           assigneeCount: task.assignee_count,
           createdAt: task.created_at,
           updatedAt: task.updated_at,
-          assignee: task.assignee ? {
+          primaryAssignee: task.assignee ? {
             id: task.assignee.id,
             email: task.assignee.email,
             firstName: task.assignee.first_name,
@@ -160,7 +160,7 @@ export const kanbanApi = {
       boardColumnId: task.board_column_id,
       taskType: task.task_type,
       projectId: task.project_id,
-      assigneeId: task.assignee_id,
+      primaryAssigneeId: task.primary_assignee_id,
       dueDate: task.due_date,
       estimatedHours: task.estimated_hours,
       actualHours: task.actual_hours,
@@ -169,7 +169,7 @@ export const kanbanApi = {
       assigneeCount: task.assignee_count,
       createdAt: task.created_at,
       updatedAt: task.updated_at,
-      assignee: task.assignee ? {
+      primaryAssignee: task.assignee ? {
         id: task.assignee.id,
         email: task.assignee.email,
         firstName: task.assignee.first_name,

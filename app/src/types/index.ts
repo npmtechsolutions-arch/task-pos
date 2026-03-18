@@ -173,9 +173,33 @@ export interface Status {
 }
 
 // Task Types
-export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
+export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | string;
 export type TaskPriority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
 export type TaskType = 'feature' | 'bug' | 'task' | 'epic';
+
+export interface WorkflowState {
+  id: string;
+  name: string;
+  category: 'todo' | 'in_progress' | 'done';
+  color: string;
+  allowComments?: boolean;
+  entryConditions?: Record<string, any>;
+  exitConditions?: Record<string, any>;
+}
+
+export interface WorkflowTransition {
+  fromStateId: string;
+  toStateId: string;
+  allowedRoles?: string[];
+}
+
+export interface TaskWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  states: WorkflowState[];
+  transitions: WorkflowTransition[];
+}
 
 export interface Task {
   id: string;
@@ -186,8 +210,8 @@ export interface Task {
   priority: TaskPriority;
   project: Project;
   projectId: string;
-  assignee?: User;
-  assigneeId?: string;
+  primaryAssignee?: User;
+  primaryAssigneeId?: string;
   reporter: User;
   reporterId: string;
   parent?: Task;
@@ -199,6 +223,9 @@ export interface Task {
   completedAt?: string;
   estimatedHours?: number;
   actualHours: number;
+  priorityScore: number;
+  workflowId?: string;
+  workflowStateId?: string;
   attachments: Attachment[];
   comments: Comment[];
   dependencies: TaskDependency[];
@@ -272,6 +299,30 @@ export interface TimeEntry {
   createdAt: string;
 }
 
+export interface Timesheet {
+  id: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  totalHours: number;
+  billableHours: number;
+  approvedBy?: string;
+  approvedAt?: string;
+  entries: TimesheetEntry[];
+}
+
+export interface TimesheetEntry {
+  id: string;
+  timesheetId: string;
+  taskId: string;
+  projectId: string;
+  date: string;
+  hours: number;
+  description?: string;
+  isBillable: boolean;
+}
+
 // Milestone Types (legacy - kept for compatibility)
 export interface ProjectMilestone {
   id: string;
@@ -334,7 +385,7 @@ export interface TaskFilters {
   projectId?: string;
   status?: TaskStatus | TaskStatus[];
   priority?: TaskPriority | TaskPriority[];
-  assigneeId?: string;
+  primaryAssigneeId?: string;
   reporterId?: string;
   labelIds?: string[];
   dueDateFrom?: string;

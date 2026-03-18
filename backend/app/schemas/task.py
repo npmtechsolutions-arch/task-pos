@@ -140,7 +140,7 @@ class TaskCreate(TaskBase):
 
     project_id: str
     parent_id: Optional[str] = None
-    assignee_id: Optional[str] = None
+    primary_assignee_id: Optional[str] = None
     due_date: Optional[datetime] = None
     start_date: Optional[date] = None
     estimated_hours: Optional[float] = None
@@ -155,7 +155,7 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = None
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
-    assignee_id: Optional[str] = None
+    primary_assignee_id: Optional[str] = None
     due_date: Optional[datetime] = None
     start_date: Optional[date] = None
     estimated_hours: Optional[float] = None
@@ -179,8 +179,8 @@ class TaskResponse(TaskBase):
     project_id: str
     parent_id: Optional[str] = None
     status: TaskStatus
-    assignee_id: Optional[str] = None
-    assignee: Optional[UserResponse] = None
+    primary_assignee_id: Optional[str] = None
+    primary_assignee: Optional[UserResponse] = None
     reporter_id: str
     reporter: UserResponse
     due_date: Optional[datetime] = None
@@ -191,6 +191,9 @@ class TaskResponse(TaskBase):
     actual_hours: float
     position: float
     board_column_id: Optional[str] = None
+    priority_score: float
+    workflow_id: Optional[str] = None
+    workflow_state_id: Optional[str] = None
     custom_fields: dict
     tags: List[TagResponse]
     is_overdue: bool
@@ -222,7 +225,7 @@ class TaskFilterParams(BaseModel):
     project_id: Optional[str] = None
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
-    assignee_id: Optional[str] = None
+    primary_assignee_id: Optional[str] = None
     reporter_id: Optional[str] = None
     search: Optional[str] = None
     due_before: Optional[datetime] = None

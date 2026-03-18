@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Clock, User, GitBranch, Loader2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useTaskStore, useProjectStore, useAuthStore, useUIStore } from '@/stores';
+import { useTaskStore, useProjectStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -23,40 +24,61 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { TASK_PRIORITIES, TASK_STATUSES } from '@/lib/constants';
+import { TASK_PRIORITIES } from '@/lib/constants';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(500, 'Title is too long'),
   description: z.string().optional(),
   projectId: z.string().min(1, 'Project is required'),
-  status: z.enum(['todo', 'in_progress', 'review', 'done']),
   priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']),
-  assigneeId: z.string().optional(),
+  primaryAssigneeId: z.string().optional(),
   dueDate: z.date().optional(),
-  estimatedHours: z.number().min(0).optional(),
+  estimatedHours: z.string().optional(),
+  parentId: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || !val.trim() || UUID_REGEX.test(val.trim()),
+      { message: 'Parent Task ID must be a valid UUID (e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)' }
+    ),
 });
 
 type TaskFormData = z.infer<typeof taskSchema>;
 
+interface Member {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface TaskFormProps {
   onSuccess?: () => void;
   defaultProjectId?: string;
+  parentId?: string;
 }
 
-// Mock users for assignee selection
-const mockUsers = [
-  { id: '1', name: 'Admin User' },
-  { id: '2', name: 'John Doe' },
-  { id: '3', name: 'Jane Smith' },
-  { id: '4', name: 'Bob Wilson' },
-];
+const PRIORITY_COLORS: Record<string, string> = {
+  lowest: '#94a3b8',
+  low: '#60a5fa',
+  medium: '#f59e0b',
+  high: '#ef4444',
+  highest: '#7c3aed',
+};
 
-export function TaskForm({ onSuccess, defaultProjectId }: TaskFormProps) {
-  const { addTask } = useTaskStore();
-  const { projects } = useProjectStore();
-  const { user } = useAuthStore();
+export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProps) {
+  const { createTask } = useTaskStore();
+  const { projects, fetchProjects } = useProjectStore();
   const { addToast } = useUIStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId || '');
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isFetchingMembers, setIsFetchingMembers] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     register,
@@ -67,80 +89,101 @@ export function TaskForm({ onSuccess, defaultProjectId }: TaskFormProps) {
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskSchema),
     defaultValues: {
-      status: 'todo',
       priority: 'medium',
       projectId: defaultProjectId || '',
+      parentId: parentId || undefined,
     },
   });
 
   const dueDate = watch('dueDate');
 
+  // Ensure projects are loaded
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetchProjects();
+    }
+  }, []);
+
+  // When a project is selected → fetch its detail to get members
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setMembers([]);
+      return;
+    }
+    setIsFetchingMembers(true);
+    axios
+      .get(`${API_URL}/projects/${selectedProjectId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      })
+      .then((res) => {
+        const projectMembers: Member[] = (res.data.members ?? []).map((m: any) => ({
+          id: m.user_id ?? m.user?.id,
+          firstName: m.user?.first_name ?? m.user?.firstName ?? '',
+          lastName: m.user?.last_name ?? m.user?.lastName ?? '',
+        }));
+        setMembers(projectMembers);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch project members:', err);
+        setMembers([]);
+      })
+      .finally(() => setIsFetchingMembers(false));
+  }, [selectedProjectId]);
+
+  // If defaultProjectId is provided, load members immediately
+  useEffect(() => {
+    if (defaultProjectId) {
+      setSelectedProjectId(defaultProjectId);
+      setValue('projectId', defaultProjectId);
+    }
+  }, [defaultProjectId]);
+
   const onSubmit = async (data: TaskFormData) => {
     setIsSubmitting(true);
-    
+    setSubmitError(null);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Get project details
-      const project = projects.find(p => p.id === data.projectId);
-      if (!project) throw new Error('Project not found');
-      
-      // Get assignee details
-      const actualAssigneeId = data.assigneeId === 'unassigned' ? undefined : data.assigneeId;
-      const assignee = actualAssigneeId ? mockUsers.find(u => u.id === actualAssigneeId) : null;
-      
-      // Create new task
-      const newTask = {
-        id: `t${Date.now()}`,
-        taskNumber: Math.floor(Math.random() * 1000),
-        title: data.title,
-        description: data.description,
-        status: data.status,
+      const assigneeId =
+        data.primaryAssigneeId === 'unassigned' || !data.primaryAssigneeId
+          ? null
+          : data.primaryAssigneeId;
+
+      await createTask({
+        title: data.title.trim(),
+        description: data.description?.trim() || undefined,
+        project_id: data.projectId,
+        parent_id: data.parentId?.trim() || parentId || null,
+        primary_assignee_id: assigneeId,
         priority: data.priority,
-        project: project as any,
-        projectId: data.projectId,
-        assignee: assignee ? {
-          id: assignee.id,
-          email: '',
-          firstName: assignee.name.split(' ')[0],
-          lastName: assignee.name.split(' ')[1] || '',
-          isActive: true,
-          timezone: 'UTC',
-          language: 'en',
-          role: 'member',
-          createdAt: new Date().toISOString(),
-        } : undefined,
-        assigneeId: actualAssigneeId,
-        reporter: user!,
-        reporterId: user!.id,
-        labels: [],
-        dueDate: data.dueDate?.toISOString(),
-        estimatedHours: data.estimatedHours,
-        actualHours: 0,
-        attachments: [],
-        comments: [],
-        dependencies: [],
-        subtasks: [],
-        customFields: {},
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      addTask(newTask as any);
-      
+        due_date: data.dueDate ? data.dueDate.toISOString() : null,
+        estimated_hours: data.estimatedHours ? parseFloat(data.estimatedHours) : null,
+      });
+
       addToast({
         type: 'success',
-        title: 'Task created successfully',
+        title: 'Task created',
+        message: `"${data.title}" saved to the database.`,
       });
-      
       onSuccess?.();
-    } catch (error) {
-      addToast({
-        type: 'error',
-        title: 'Failed to create task',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
+    } catch (error: any) {
+      // FastAPI 422 returns detail as an array of {loc, msg} objects
+      // Regular errors return detail as a string
+      let msg = 'Failed to create task';
+      const detail = error?.response?.data?.detail;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        // Flatten FastAPI validation errors into a readable string
+        msg = detail
+          .map((d: any) => {
+            const field = d.loc ? d.loc.slice(1).join(' → ') : '';
+            return field ? `${field}: ${d.msg}` : d.msg;
+          })
+          .join('  |  ');
+      } else if (error instanceof Error) {
+        msg = error.message;
+      }
+      setSubmitError(msg);
+      addToast({ type: 'error', title: 'Failed to create task', message: msg });
     } finally {
       setIsSubmitting(false);
     }
@@ -148,79 +191,74 @@ export function TaskForm({ onSuccess, defaultProjectId }: TaskFormProps) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {/* API Error */}
+      {submitError && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>{submitError}</span>
+        </div>
+      )}
+
       {/* Title */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label htmlFor="title">Title *</Label>
         <Input
           id="title"
-          placeholder="Enter task title"
+          placeholder="What needs to be done?"
           {...register('title')}
           className={cn(errors.title && 'border-red-500')}
+          autoFocus
         />
-        {errors.title && (
-          <p className="text-sm text-red-500">{errors.title.message}</p>
-        )}
+        {errors.title && <p className="text-sm text-red-500">{errors.title.message}</p>}
       </div>
 
       {/* Description */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label htmlFor="description">Description</Label>
         <Textarea
           id="description"
-          placeholder="Enter task description"
+          placeholder="Add details, acceptance criteria, or context…"
           rows={3}
           {...register('description')}
         />
       </div>
 
-      {/* Project & Status Row */}
+      {/* Project + Priority */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="project">Project *</Label>
-          <Select
-            onValueChange={(value) => setValue('projectId', value)}
-            defaultValue={defaultProjectId}
-          >
-            <SelectTrigger className={cn(errors.projectId && 'border-red-500')}>
-              <SelectValue placeholder="Select project" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="space-y-1.5">
+          <Label>Project *</Label>
+          {projects.length === 0 ? (
+            <div className="flex items-center gap-2 h-10 px-3 border rounded-md text-sm text-gray-400">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading projects…
+            </div>
+          ) : (
+            <Select
+              onValueChange={(value) => {
+                setValue('projectId', value, { shouldValidate: true });
+                setSelectedProjectId(value);
+              }}
+              defaultValue={defaultProjectId}
+            >
+              <SelectTrigger className={cn(errors.projectId && 'border-red-500')}>
+                <SelectValue placeholder="Select project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    <span className="font-mono text-xs text-indigo-600 mr-1">{project.key}</span>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {errors.projectId && (
             <p className="text-sm text-red-500">{errors.projectId.message}</p>
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <Select
-            onValueChange={(value: any) => setValue('status', value)}
-            defaultValue="todo"
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              {TASK_STATUSES.map((status) => (
-                <SelectItem key={status.value} value={status.value}>
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Priority & Assignee Row */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="priority">Priority</Label>
+        <div className="space-y-1.5">
+          <Label>Priority</Label>
           <Select
             onValueChange={(value: any) => setValue('priority', value)}
             defaultValue="medium"
@@ -229,34 +267,15 @@ export function TaskForm({ onSuccess, defaultProjectId }: TaskFormProps) {
               <SelectValue placeholder="Select priority" />
             </SelectTrigger>
             <SelectContent>
-              {TASK_PRIORITIES.map((priority) => (
-                <SelectItem key={priority.value} value={priority.value}>
+              {TASK_PRIORITIES.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
                   <div className="flex items-center gap-2">
                     <div
                       className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: priority.color }}
+                      style={{ backgroundColor: PRIORITY_COLORS[p.value] }}
                     />
-                    {priority.label}
+                    {p.label}
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="assignee">Assignee</Label>
-          <Select
-            onValueChange={(value) => setValue('assigneeId', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select assignee" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              {mockUsers.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -264,10 +283,41 @@ export function TaskForm({ onSuccess, defaultProjectId }: TaskFormProps) {
         </div>
       </div>
 
-      {/* Due Date & Estimated Hours Row */}
+      {/* Assignee + Due Date */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Due Date</Label>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1">
+            <User className="w-3.5 h-3.5" /> Assignee
+          </Label>
+          <Select onValueChange={(value) => setValue('primaryAssigneeId', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder={isFetchingMembers ? 'Loading…' : 'Unassigned'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.firstName} {m.lastName}
+                </SelectItem>
+              ))}
+              {members.length === 0 && !isFetchingMembers && selectedProjectId && (
+                <SelectItem value="no-members" disabled>
+                  No members found in project
+                </SelectItem>
+              )}
+              {!selectedProjectId && (
+                <SelectItem value="no-project" disabled>
+                  Select a project first
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1">
+            <CalendarIcon className="w-3.5 h-3.5" /> Due Date
+          </Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -291,31 +341,63 @@ export function TaskForm({ onSuccess, defaultProjectId }: TaskFormProps) {
             </PopoverContent>
           </Popover>
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="estimatedHours">Estimated Hours</Label>
+      {/* Estimated Hours + Parent Task */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="estimatedHours" className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> Estimated Hours
+          </Label>
           <Input
             id="estimatedHours"
             type="number"
             min="0"
             step="0.5"
-            placeholder="e.g., 4"
-            {...register('estimatedHours', { valueAsNumber: true })}
+            placeholder="e.g. 4"
+            {...register('estimatedHours')}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="parentId" className="flex items-center gap-1">
+            <GitBranch className="w-3.5 h-3.5" /> Parent Task ID
+          </Label>
+          <Input
+            id="parentId"
+            placeholder="UUID (optional)"
+            {...register('parentId')}
+            defaultValue={parentId}
           />
         </div>
       </div>
 
-      {/* Submit Buttons */}
-      <div className="flex justify-end gap-3 pt-4">
+      {/* Badge */}
+      <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+        <Badge variant="outline" className="text-xs gap-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+          Saved to PostgreSQL
+        </Badge>
+        <span>Visible to all project members after creation</span>
+      </div>
+
+      {/* Submit */}
+      <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
         <Button type="button" variant="outline" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button 
-          type="submit" 
-          className="bg-blue-600 hover:bg-blue-700"
+        <Button
+          type="submit"
+          className="bg-indigo-600 hover:bg-indigo-700"
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'Creating...' : 'Create Task'}
+          {isSubmitting ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Creating…
+            </span>
+          ) : (
+            'Create Task'
+          )}
         </Button>
       </div>
     </form>

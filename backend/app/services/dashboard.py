@@ -14,6 +14,8 @@ from app.schemas.dashboard import (
     DashboardProjectsResponse,
     ProjectProgressResponse,
 )
+from app.websocket.manager import manager
+
 
 
 class DashboardService:
@@ -21,6 +23,13 @@ class DashboardService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def broadcast_dashboard_update(self, user_id: str) -> None:
+        """Trigger a real-time WebSocket reload of the dashboard for this user."""
+        await manager.send_to_user(
+            user_id,
+            {"type": "dashboard_update", "action": "reload"}
+        )
 
     async def get_stats(self, user_id: str) -> DashboardStatsResponse:
         """Aggregate all dashboard stats for a user."""
@@ -49,7 +58,7 @@ class DashboardService:
         now = datetime.utcnow()
         week_later = now + timedelta(days=7)
 
-        my_tasks_stmt = select(Task).where(Task.assignee_id == user_id)
+        my_tasks_stmt = select(Task).where(Task.primary_assignee_id == user_id)
         my_tasks_result = await self.db.execute(my_tasks_stmt)
         my_tasks = my_tasks_result.scalars().all()
 

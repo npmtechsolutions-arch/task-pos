@@ -16,6 +16,9 @@ from app.api.v1.tasks import router as tasks_router
 from app.api.v1.team import router as team_router
 from app.api.v1.templates import router as templates_router
 from app.api.v1.users import router as users_router
+from app.api.v1.workflows import router as workflows_router
+from app.api.v1.timesheets import router as timesheets_router
+from app.api.v1.capacity import router as capacity_router
 from app.api.v1.landing import router as landing_router
 
 api_router = APIRouter()
@@ -36,5 +39,8 @@ api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
 api_router.include_router(
     notifications_router, prefix="/notifications", tags=["notifications"]
 )
+api_router.include_router(workflows_router, prefix="/workflows", tags=["workflows"])
+api_router.include_router(timesheets_router, prefix="/timesheets", tags=["timesheets"])
+api_router.include_router(capacity_router, prefix="/capacity", tags=["capacity"])
 api_router.include_router(landing_router, prefix="/landing", tags=["landing"])
 api_router.include_router(landing_router, prefix="/onboarding", tags=["landing"])

@@ -106,8 +106,8 @@ async def _task_to_card(task: Task, db: AsyncSession) -> KanbanTaskCardResponse:
         position=task.position,
         board_column_id=task.board_column_id,
         project_id=task.project_id,
-        assignee_id=task.assignee_id,
-        assignee=_user_to_assignee(task.assignee) if task.assignee else None,
+        primary_assignee_id=task.primary_assignee_id,
+        assignee=_user_to_assignee(task.primary_assignee) if task.primary_assignee else None,
         labels=[
             KanbanLabelResponse(
                 id=lbl.id,
@@ -157,7 +157,7 @@ async def get_kanban_board(
     # Fetch all tasks in the project with their labels loaded
     tasks_result = await db.execute(
         select(Task)
-        .options(selectinload(Task.labels), selectinload(Task.assignments), selectinload(Task.assignee))
+        .options(selectinload(Task.labels), selectinload(Task.assignments), selectinload(Task.primary_assignee))
         .where(Task.project_id == project_id)
         .order_by(Task.position)
     )
@@ -234,7 +234,7 @@ async def create_kanban_task(
         status=task_data.status,
         priority=task_data.priority,
         task_type=task_data.task_type,
-        assignee_id=task_data.assignee_id,
+        primary_assignee_id=task_data.primary_assignee_id,
         due_date=task_data.due_date,
         estimated_hours=task_data.estimated_hours,
         position=task_data.position,
@@ -279,7 +279,7 @@ async def get_kanban_task(
             selectinload(Task.comments),
             selectinload(Task.assignments),
             selectinload(Task.labels),
-            selectinload(Task.assignee),
+            selectinload(Task.primary_assignee),
             selectinload(Task.reporter),
         )
         .where(Task.id == task_id)

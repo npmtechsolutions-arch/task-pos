@@ -127,7 +127,7 @@ async def get_time_summary(
 
         task_count_result = await db.execute(
             select(func.count(Task.id)).where(
-                and_(Task.assignee_id == user.id, Task.project_id.in_(project_ids))
+                and_(Task.primary_assignee_id == user.id, Task.project_id.in_(project_ids))
             )
         )
         task_count = task_count_result.scalar_one() or 0
@@ -263,7 +263,7 @@ async def get_overview_report(
 
         task_count_result = await db.execute(
             select(func.count(Task.id)).where(
-                and_(Task.assignee_id == user.id, Task.project_id.in_(project_ids))
+                and_(Task.primary_assignee_id == user.id, Task.project_id.in_(project_ids))
             )
         )
         task_count = task_count_result.scalar_one() or 0

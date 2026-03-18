@@ -112,8 +112,8 @@ class User(Base):
     )
     assigned_tasks: Mapped[List["Task"]] = relationship(
         "Task",
-        foreign_keys="Task.assignee_id",
-        back_populates="assignee",
+        foreign_keys="Task.primary_assignee_id",
+        back_populates="primary_assignee",
         lazy="selectin",
     )
     reported_tasks: Mapped[List["Task"]] = relationship(

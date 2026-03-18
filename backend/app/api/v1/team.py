@@ -83,7 +83,7 @@ async def get_project_team(
         # Task count
         tasks_result = await db.execute(
             select(func.count(Task.id)).where(
-                and_(Task.assignee_id == member.user_id, Task.project_id == project_id)
+                and_(Task.primary_assignee_id == member.user_id, Task.project_id == project_id)
             )
         )
         task_count = tasks_result.scalar_one() or 0
@@ -91,7 +91,7 @@ async def get_project_team(
         completed_result = await db.execute(
             select(func.count(Task.id)).where(
                 and_(
-                    Task.assignee_id == member.user_id,
+                    Task.primary_assignee_id == member.user_id,
                     Task.project_id == project_id,
                     Task.status == TaskStatus.DONE,
                 )

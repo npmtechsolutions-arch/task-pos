@@ -6,4 +6,5 @@ export { useNotificationStore } from './notificationStore';
 export { useDashboardStore } from './dashboardStore';
 export { useTeamStore } from './teamStore';
 export { useKanbanStore } from './kanbanStore';
+export { useTimeStore } from './timeStore';
 

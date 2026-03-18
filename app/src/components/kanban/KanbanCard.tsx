@@ -146,11 +146,11 @@ export function KanbanCard({ task, isDragging: isOverlayDragging }: KanbanCardPr
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {/* Assignee */}
-            {task.assignee ? (
-              <Avatar className="w-6 h-6" title={task.assignee.fullName}>
-                <AvatarImage src={task.assignee.avatarUrl} />
+            {task.primaryAssignee ? (
+              <Avatar className="w-6 h-6" title={task.primaryAssignee.fullName}>
+                <AvatarImage src={task.primaryAssignee.avatarUrl} />
                 <AvatarFallback className="bg-blue-600 text-white text-[10px]">
-                  {task.assignee.firstName[0]}{task.assignee.lastName[0]}
+                  {task.primaryAssignee.firstName[0]}{task.primaryAssignee.lastName[0]}
                 </AvatarFallback>
               </Avatar>
             ) : (

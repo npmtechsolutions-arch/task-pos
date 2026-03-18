@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Plus, 
@@ -8,10 +8,12 @@ import {
   List, 
   Calendar as CalendarIcon,
   MoreHorizontal,
-  CheckSquare
+  CheckSquare,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { cn, formatDueDate, getPriorityColor, getStatusBgColor, getStatusLabel } from '@/lib/utils';
-import { useTaskStore, useProjectStore } from '@/stores';
+import { useTaskStore, useProjectStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +33,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { KanbanBoard } from '@/components/kanban/KanbanBoard';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -38,11 +46,17 @@ import { TASK_STATUSES } from '@/lib/constants';
 import type { Task } from '@/types';
 
 export function TasksList() {
-  const { filters, setFilters, getFilteredTasks } = useTaskStore();
-  const { projects } = useProjectStore();
+  const { filters, setFilters, getFilteredTasks, fetchTasks, isLoading } = useTaskStore();
+  const { projects, fetchProjects } = useProjectStore();
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'calendar'>('board');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Load tasks AND projects from PostgreSQL on mount
+  useEffect(() => {
+    fetchTasks();
+    if (projects.length === 0) fetchProjects();
+  }, []);
 
   const filteredTasks = getFilteredTasks();
 
@@ -216,7 +230,13 @@ export function TasksList() {
       )}
 
       {/* Tasks View */}
-      {filteredTasks.length === 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center h-40">
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading tasks from database…
+          </div>
+        </div>
+      ) : filteredTasks.length === 0 ? (
         <EmptyState
           icon={CheckSquare}
           title="No tasks found"
@@ -247,6 +267,22 @@ interface TaskListTableProps {
 }
 
 function TaskListTable({ tasks }: TaskListTableProps) {
+  const { deleteTaskApi } = useTaskStore();
+  const { addToast } = useUIStore();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (task: Task) => {
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+    setDeletingId(task.id);
+    try {
+      await deleteTaskApi(task.id);
+      addToast({ type: 'success', title: 'Task deleted', message: `"${task.title}" has been deleted.` });
+    } catch {
+      addToast({ type: 'error', title: 'Delete failed', message: 'Could not delete the task.' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <table className="w-full">
@@ -291,16 +327,16 @@ function TaskListTable({ tasks }: TaskListTableProps) {
                 </div>
               </td>
               <td className="px-4 py-3">
-                {task.assignee ? (
+                {task.primaryAssignee ? (
                   <div className="flex items-center gap-2">
                     <Avatar className="w-6 h-6">
-                      <AvatarImage src={task.assignee.avatarUrl} />
+                      <AvatarImage src={task.primaryAssignee.avatarUrl} />
                       <AvatarFallback className="text-[10px]">
-                        {task.assignee.firstName[0]}{task.assignee.lastName[0]}
+                        {task.primaryAssignee.firstName[0]}{task.primaryAssignee.lastName[0]}
                       </AvatarFallback>
                     </Avatar>
                     <span className="text-sm text-gray-600">
-                      {task.assignee.firstName} {task.assignee.lastName}
+                      {task.primaryAssignee.firstName} {task.primaryAssignee.lastName}
                     </span>
                   </div>
                 ) : (
@@ -318,9 +354,27 @@ function TaskListTable({ tasks }: TaskListTableProps) {
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
-                <Button variant="ghost" size="icon">
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={deletingId === task.id}>
+                      {deletingId === task.id
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <MoreHorizontal className="w-4 h-4" />}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link to={`/tasks/${task.id}`}>View Details</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-red-600"
+                      onClick={() => handleDelete(task)}
+                      disabled={deletingId === task.id}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </td>
             </tr>
           ))}

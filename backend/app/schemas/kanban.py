@@ -139,7 +139,7 @@ class KanbanTaskCreate(BaseModel):
     status: TaskStatus = TaskStatus.TODO
     priority: TaskPriority = TaskPriority.MEDIUM
     task_type: TaskType = TaskType.TASK
-    assignee_id: Optional[str] = None
+    primary_assignee_id: Optional[str] = None
     due_date: Optional[datetime] = None
     estimated_hours: Optional[float] = None
     position: float = 0.0
@@ -153,7 +153,7 @@ class KanbanTaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
     task_type: Optional[TaskType] = None
-    assignee_id: Optional[str] = None
+    primary_assignee_id: Optional[str] = None
     due_date: Optional[datetime] = None
     estimated_hours: Optional[float] = None
     board_column_id: Optional[str] = None
@@ -181,7 +181,7 @@ class KanbanTaskCardResponse(BaseModel):
     position: float
     board_column_id: Optional[str] = None
     project_id: str
-    assignee_id: Optional[str] = None
+    primary_assignee_id: Optional[str] = None
     assignee: Optional[AssigneeResponse] = None
     labels: List[KanbanLabelResponse] = []
     due_date: Optional[datetime] = None

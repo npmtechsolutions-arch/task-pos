@@ -28,6 +28,7 @@ from app.schemas.task import (
     TimeEntryCreate,
     TimeEntryUpdate,
 )
+from app.services.dashboard import DashboardService
 from app.services.project import ProjectService
 
 logger = get_logger(__name__)
@@ -71,8 +72,8 @@ class TaskService:
             if filters.priority:
                 query = query.where(Task.priority == filters.priority)
 
-            if filters.assignee_id:
-                query = query.where(Task.assignee_id == filters.assignee_id)
+            if filters.primary_assignee_id:
+                query = query.where(Task.primary_assignee_id == filters.primary_assignee_id)
 
             if filters.reporter_id:
                 query = query.where(Task.reporter_id == filters.reporter_id)
@@ -123,7 +124,7 @@ class TaskService:
         status: Optional[TaskStatus] = None,
     ) -> List[Task]:
         """Get tasks assigned to user."""
-        query = select(Task).where(Task.assignee_id == user_id)
+        query = select(Task).where(Task.primary_assignee_id == user_id)
 
         if status:
             query = query.where(Task.status == status)
@@ -152,7 +153,7 @@ class TaskService:
             description=task_data.description,
             task_type=task_data.task_type,
             priority=task_data.priority,
-            assignee_id=task_data.assignee_id,
+            primary_assignee_id=task_data.primary_assignee_id,
             reporter_id=reporter_id,
             due_date=task_data.due_date,
             start_date=task_data.start_date,
@@ -176,6 +177,13 @@ class TaskService:
 
         # Update project metrics
         await self.project_service.update_metrics(task_data.project_id)
+
+        # Trigger real-time dashboard update for assignee and reporter
+        dashboard_service = DashboardService(self.db)
+        if task.primary_assignee_id:
+            await dashboard_service.broadcast_dashboard_update(task.primary_assignee_id)
+        if reporter_id != task.primary_assignee_id:
+            await dashboard_service.broadcast_dashboard_update(reporter_id)
 
         logger.info("Task created successfully", task_id=task.id)
         return task
@@ -216,6 +224,13 @@ class TaskService:
 
         # Update project metrics
         await self.project_service.update_metrics(task.project_id)
+
+        # Trigger real-time dashboard update
+        dashboard_service = DashboardService(self.db)
+        if task.primary_assignee_id:
+            await dashboard_service.broadcast_dashboard_update(task.primary_assignee_id)
+        if task.reporter_id != task.primary_assignee_id:
+            await dashboard_service.broadcast_dashboard_update(task.reporter_id)
 
         logger.info("Task updated", task_id=task_id)
         return task

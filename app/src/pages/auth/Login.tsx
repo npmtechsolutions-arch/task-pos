@@ -27,7 +27,7 @@ export function Login() {
         type: 'success',
         title: 'Welcome back!',
       });
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       // Error is handled in the store
     }

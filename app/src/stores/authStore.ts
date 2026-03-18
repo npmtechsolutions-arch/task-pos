@@ -11,9 +11,8 @@ interface AuthStore extends AuthState {
   updateUser: (user: Partial<User>) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  initAuth: () => Promise<void>;
 }
-
-// Remove mock user
 
 export const useAuthStore = create<AuthStore>()(
   persist(
@@ -22,6 +21,44 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+
+      /**
+       * Called once on app startup. Re-applies the stored JWT token to axios
+       * so that API calls work after a page refresh without re-logging in.
+       */
+      initAuth: async () => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          set({ isAuthenticated: false, user: null });
+          return;
+        }
+
+        // Re-apply to axios defaults
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+        // Validate the token is still good by fetching the current user
+        try {
+          const response = await axios.get(`${API_URL}/auth/me`);
+          const apiUser = response.data;
+          const userObj = {
+            id: apiUser.id,
+            email: apiUser.email,
+            firstName: apiUser.first_name || apiUser.firstName || '',
+            lastName: apiUser.last_name || apiUser.lastName || '',
+            role: apiUser.role,
+            isActive: apiUser.is_active,
+            timezone: apiUser.timezone,
+            language: apiUser.language,
+            createdAt: apiUser.created_at,
+          };
+          set({ user: userObj as any, isAuthenticated: true });
+        } catch {
+          // Token is invalid or expired → clear session
+          localStorage.removeItem('token');
+          delete axios.defaults.headers.common['Authorization'];
+          set({ user: null, isAuthenticated: false });
+        }
+      },
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -46,7 +83,7 @@ export const useAuthStore = create<AuthStore>()(
             createdAt: apiUser.created_at,
           };
 
-          // Store token in localStorage
+          // Store token and apply to all future axios requests
           localStorage.setItem('token', access_token);
           axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
@@ -94,10 +131,10 @@ export const useAuthStore = create<AuthStore>()(
       },
     }),
     {
-      name: 'auth-session-v2', // Definitive cache wipe
+      name: 'auth-session-v3',
       partialize: (state) => ({
         user: state.user,
-        isAuthenticated: state.isAuthenticated
+        isAuthenticated: state.isAuthenticated,
       }),
     }
   )

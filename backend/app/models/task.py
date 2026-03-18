@@ -201,14 +201,15 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(default=TaskStatus.TODO, index=True)
     priority: Mapped[TaskPriority] = mapped_column(default=TaskPriority.MEDIUM, index=True)
 
-    # Assignment (primary)
-    assignee_id: Mapped[Optional[str]] = mapped_column(
+    # Assignment
+    primary_assignee_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id"), index=True
     )
-    assignee: Mapped[Optional["User"]] = relationship(
-        "User", foreign_keys=[assignee_id], back_populates="assigned_tasks", lazy="selectin"
+    primary_assignee: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[primary_assignee_id], lazy="selectin"
     )
-    reporter_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    
+    reporter_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     reporter: Mapped["User"] = relationship(
         "User", foreign_keys=[reporter_id], back_populates="reported_tasks", lazy="selectin"
     )
@@ -229,8 +230,17 @@ class Task(Base):
         String(36), ForeignKey("board_columns.id")
     )
 
-    # Custom fields
+    # Custom fields & Priority Scoring calculations
     custom_fields: Mapped[dict] = mapped_column(JSONB, default=dict)
+    priority_score: Mapped[float] = mapped_column(Float, default=0.0)
+
+    # Workflow Binding
+    workflow_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("task_workflows.id")
+    )
+    workflow_state_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("task_workflow_states.id")
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -313,8 +323,10 @@ class TaskAssignment(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=False, index=True
     )
-    user: Mapped["User"] = relationship("User", lazy="selectin")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
 
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     assigned_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id"))
 

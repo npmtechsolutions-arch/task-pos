@@ -17,10 +17,11 @@ async def seed_custom_admin():
         from app.services.user import UserService
         from app.schemas.user import UserCreate
         from app.models.user import UserRole
-        from app.schemas.project import ProjectCreate, ProjectVisibility
+        from app.schemas.project import ProjectCreate, ProjectVisibility, ProjectFilterParams
         from app.schemas.task import TaskCreate, TaskPriority
 
         async with async_session() as db:
+            user_service = UserService(db)
             user_data = UserCreate(
                 email="admin", 
                 password="271527",
@@ -29,10 +30,10 @@ async def seed_custom_admin():
                 role=UserRole.ADMIN
             )
             
-            existing_user = await UserService.get_by_email(db, email="admin")
+            existing_user = await user_service.get_by_email(email="admin")
             if not existing_user:
                 logger.info("Creating custom 'admin' user...")
-                user = await UserService.create(db, obj_in=user_data)
+                user = await user_service.create(user_data=user_data)
                 existing_user = user
                 logger.info("Super admin created successfully: admin / 271527")
             else:
@@ -49,7 +50,7 @@ async def seed_custom_admin():
             task_service = TaskService(db)
 
             # Check if any projects exist
-            filters = type('obj', (object,), {'status': None, 'search': None, 'page': 1, 'per_page': 1})
+            filters = ProjectFilterParams(status=None, search=None, page=1, per_page=1)
             existing_projects, _ = await project_service.list_projects(user_id=existing_user.id, filters=filters)
             
             if not existing_projects:
@@ -60,7 +61,7 @@ async def seed_custom_admin():
                     description="Complete overhaul of company website with modern design",
                     key="WEB",
                     visibility=ProjectVisibility.PRIVATE,
-                ), user_id=existing_user.id)
+                ), owner_id=existing_user.id)
 
                 # Project 2
                 p2 = await project_service.create(ProjectCreate(
@@ -68,7 +69,7 @@ async def seed_custom_admin():
                     description="Build native mobile apps for iOS and Android",
                     key="MOB",
                     visibility=ProjectVisibility.PRIVATE,
-                ), user_id=existing_user.id)
+                ), owner_id=existing_user.id)
 
                 # Project 3
                 p3 = await project_service.create(ProjectCreate(
@@ -76,33 +77,33 @@ async def seed_custom_admin():
                     description="First quarter marketing initiatives and campaigns",
                     key="MKT",
                     visibility=ProjectVisibility.PRIVATE,
-                ), user_id=existing_user.id)
+                ), owner_id=existing_user.id)
 
                 # Seed some tasks
                 await task_service.create(TaskCreate(
                     title="Design homepage mockups",
                     description="Create 3 different design concepts for the new homepage",
                     project_id=p1.id,
-                    assignee_id=existing_user.id,
+                    primary_assignee_id=existing_user.id,
                     priority=TaskPriority.HIGH,
                     estimated_hours=16.0
-                ), user_id=existing_user.id)
+                ), reporter_id=existing_user.id)
 
                 await task_service.create(TaskCreate(
                     title="Optimize images for web",
                     project_id=p1.id,
-                    assignee_id=existing_user.id,
+                    primary_assignee_id=existing_user.id,
                     priority=TaskPriority.LOW,
                     estimated_hours=8.0
-                ), user_id=existing_user.id)
+                ), reporter_id=existing_user.id)
 
                 await task_service.create(TaskCreate(
                     title="Create app wireframes",
                     project_id=p2.id,
-                    assignee_id=existing_user.id,
+                    primary_assignee_id=existing_user.id,
                     priority=TaskPriority.HIGH,
                     estimated_hours=24.0
-                ), user_id=existing_user.id)
+                ), reporter_id=existing_user.id)
 
                 logger.info("Default Projects and Tasks seeded successfully.")
             

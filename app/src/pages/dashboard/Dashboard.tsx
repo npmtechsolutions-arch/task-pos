@@ -25,6 +25,30 @@ export function Dashboard() {
     }
   }, [stats, fetchStats, isLoadingStats]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    // Connect to global WebSocket manager
+    const wsUrl = `ws://localhost:8000/ws/${user.id}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'dashboard_update' && data.action === 'reload') {
+          console.log("WebSocket triggered dashboard reload");
+          fetchStats(); // Instantly refresh 
+        }
+      } catch (err) {
+        console.error("Failed to parse websocket message", err);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [user?.id, fetchStats]);
+
   const defaultStats = {
     total_projects: 0,
     active_projects: 0,

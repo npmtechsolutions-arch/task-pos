@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Plus, 
@@ -9,10 +9,12 @@ import {
   MoreHorizontal,
   Calendar,
   CheckSquare,
-  Users
+  Users,
+  Archive,
+  Loader2
 } from 'lucide-react';
 import { cn, formatDate, getProjectStatusColor } from '@/lib/utils';
-import { useProjectStore } from '@/stores';
+import { useProjectStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -45,10 +47,15 @@ import { PROJECT_STATUSES } from '@/lib/constants';
 import type { Project } from '@/types';
 
 export function ProjectsList() {
-  const { filters, setFilters, getFilteredProjects } = useProjectStore();
+  const { filters, setFilters, getFilteredProjects, fetchProjects, isLoading } = useProjectStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch projects from PostgreSQL on mount
+  useEffect(() => {
+    fetchProjects();
+  }, []);
 
   const filteredProjects = getFilteredProjects();
 
@@ -179,7 +186,18 @@ export function ProjectsList() {
       )}
 
       {/* Projects Grid/List */}
-      {filteredProjects.length === 0 ? (
+      {isLoading && (
+        <div className="flex items-center justify-center h-32">
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Loading projects from database…
+          </div>
+        </div>
+      )}
+      {!isLoading && filteredProjects.length === 0 ? (
         <EmptyState
           icon={viewMode === 'grid' ? Grid3X3 : List}
           title="No projects found"
@@ -194,7 +212,7 @@ export function ProjectsList() {
               : { label: 'Create project', onClick: () => setIsDialogOpen(true) }
           }
         />
-      ) : viewMode === 'grid' ? (
+      ) : !isLoading && viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredProjects.map((project) => (
             <ProjectCard key={project.id} project={project} />
@@ -212,6 +230,22 @@ interface ProjectCardProps {
 }
 
 function ProjectCard({ project }: ProjectCardProps) {
+  const { archiveProjectApi } = useProjectStore();
+  const { addToast } = useUIStore();
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  const handleArchive = async () => {
+    if (!window.confirm(`Archive "${project.name}"? It will be removed from the active list.`)) return;
+    setIsArchiving(true);
+    try {
+      await archiveProjectApi(project.id);
+      addToast({ type: 'success', title: 'Project archived', message: `"${project.name}" has been archived.` });
+    } catch {
+      addToast({ type: 'error', title: 'Archive failed', message: 'Could not archive the project. Please try again.' });
+    } finally {
+      setIsArchiving(false);
+    }
+  };
   return (
     <Card className="hover:shadow-md transition-shadow group">
       <CardContent className="p-5">
@@ -249,8 +283,13 @@ function ProjectCard({ project }: ProjectCardProps) {
               <DropdownMenuItem asChild>
                 <Link to={`/projects/${project.id}`}>View Details</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>Edit Project</DropdownMenuItem>
-              <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
+              <DropdownMenuItem className="text-red-600" onClick={handleArchive} disabled={isArchiving}>
+                {isArchiving ? (
+                  <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Archiving…</>
+                ) : (
+                  <><Archive className="w-3.5 h-3.5 mr-1" /> Archive</>
+                )}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -295,6 +334,22 @@ interface ProjectListTableProps {
 }
 
 function ProjectListTable({ projects }: ProjectListTableProps) {
+  const { archiveProjectApi } = useProjectStore();
+  const { addToast } = useUIStore();
+  const [archivingId, setArchivingId] = useState<string | null>(null);
+
+  const handleArchive = async (project: Project) => {
+    if (!window.confirm(`Archive "${project.name}"? It will be removed from the active list.`)) return;
+    setArchivingId(project.id);
+    try {
+      await archiveProjectApi(project.id);
+      addToast({ type: 'success', title: 'Project archived', message: `"${project.name}" has been archived.` });
+    } catch {
+      addToast({ type: 'error', title: 'Archive failed', message: 'Could not archive. Please try again.' });
+    } finally {
+      setArchivingId(null);
+    }
+  };
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <table className="w-full">
@@ -361,8 +416,17 @@ function ProjectListTable({ projects }: ProjectListTableProps) {
                     <DropdownMenuItem asChild>
                       <Link to={`/projects/${project.id}`}>View Details</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem>Edit Project</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-red-600"
+                      onClick={() => handleArchive(project)}
+                      disabled={archivingId === project.id}
+                    >
+                      {archivingId === project.id ? (
+                        <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Archiving…</>
+                      ) : (
+                        <><Archive className="w-3.5 h-3.5 mr-1" /> Archive</>
+                      )}
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </td>

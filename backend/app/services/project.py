@@ -295,9 +295,16 @@ class ProjectService:
         return result.scalar_one_or_none()
 
     async def is_project_member(self, project_id: str, user_id: str) -> bool:
-        """Check if user is a project member."""
+        """Check if user is a project member OR the project owner."""
+        # First check explicit membership in project_members table
         member = await self.get_member(project_id, user_id)
-        return member is not None
+        if member is not None:
+            return True
+        # Also allow the project owner (they may not be in members table)
+        project = await self.get_by_id(project_id)
+        if project and str(project.owner_id) == str(user_id):
+            return True
+        return False
 
     async def has_permission(
         self, project_id: str, user_id: str, min_role: ProjectMemberRole
