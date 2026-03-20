@@ -155,7 +155,7 @@ class TaskService:
             priority=task_data.priority,
             primary_assignee_id=task_data.primary_assignee_id,
             reporter_id=reporter_id,
-            due_date=task_data.due_date,
+            due_date=task_data.due_date.replace(tzinfo=None) if task_data.due_date else None,
             start_date=task_data.start_date,
             estimated_hours=task_data.estimated_hours,
             custom_fields=task_data.custom_fields or {},
@@ -186,7 +186,7 @@ class TaskService:
             await dashboard_service.broadcast_dashboard_update(reporter_id)
 
         logger.info("Task created successfully", task_id=task.id)
-        return task
+        return await self.get_with_details(task.id)
 
     async def update(self, task_id: str, task_data: TaskUpdate) -> Optional[Task]:
         """Update task."""
@@ -208,6 +208,8 @@ class TaskService:
                         select(Tag).where(Tag.id.in_(value))
                     )
                     task.tags = tags_result.scalars().all()
+            elif isinstance(value, datetime):
+                setattr(task, field, value.replace(tzinfo=None))
             else:
                 setattr(task, field, value)
 
@@ -233,7 +235,7 @@ class TaskService:
             await dashboard_service.broadcast_dashboard_update(task.reporter_id)
 
         logger.info("Task updated", task_id=task_id)
-        return task
+        return await self.get_with_details(task.id)
 
     async def batch_update(self, update_data: TaskBatchUpdateRequest) -> int:
         """Batch update multiple tasks."""
@@ -247,7 +249,10 @@ class TaskService:
         for task in tasks:
             for field, value in update_dict.items():
                 if value is not None:
-                    setattr(task, field, value)
+                    if isinstance(value, datetime):
+                        setattr(task, field, value.replace(tzinfo=None))
+                    else:
+                        setattr(task, field, value)
             task.updated_at = datetime.utcnow()
 
         await self.db.commit()

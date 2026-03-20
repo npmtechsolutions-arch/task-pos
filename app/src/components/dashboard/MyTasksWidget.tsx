@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckSquare, MoreHorizontal, Clock, Calendar } from 'lucide-react';
+import { CheckSquare, MoreHorizontal, Clock, Calendar, Loader2 } from 'lucide-react';
 import { cn, formatDueDate, getPriorityColor, getStatusBgColor, getStatusLabel } from '@/lib/utils';
 import { useTaskStore, useAuthStore } from '@/stores';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,8 +77,16 @@ interface MyTasksWidgetProps {
 
 export function MyTasksWidget({ limit = 5 }: MyTasksWidgetProps) {
   const { user } = useAuthStore();
-  const { tasks, updateTask } = useTaskStore();
-  
+  const { tasks, updateTask, fetchTasks, isLoading } = useTaskStore();
+
+  // Fetch tasks for current user independently when the widget mounts
+  useEffect(() => {
+    if (user?.id) {
+      fetchTasks({ primary_assignee_id: user.id });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // Get tasks assigned to current user, sorted by due date
   const myTasks = tasks
     .filter((task) => task.primaryAssigneeId === user?.id && task.status !== 'done')
@@ -88,9 +97,9 @@ export function MyTasksWidget({ limit = 5 }: MyTasksWidgetProps) {
       }
       if (a.dueDate) return -1;
       if (b.dueDate) return 1;
-      
+
       const priorityOrder = { highest: 0, high: 1, medium: 2, low: 3, lowest: 4 };
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
+      return (priorityOrder as any)[a.priority] - (priorityOrder as any)[b.priority];
     })
     .slice(0, limit);
 
@@ -113,7 +122,11 @@ export function MyTasksWidget({ limit = 5 }: MyTasksWidgetProps) {
         </Button>
       </CardHeader>
       <CardContent>
-        {myTasks.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+          </div>
+        ) : myTasks.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-sm text-gray-500">No tasks assigned to you</p>
             <Button variant="link" className="text-blue-600 mt-2" asChild>

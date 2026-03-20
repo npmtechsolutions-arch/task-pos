@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, 
-  Bell, 
   Plus, 
   Command,
   Settings,
@@ -13,11 +12,10 @@ import {
   Monitor
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuthStore, useUIStore, useNotificationStore } from '@/stores';
+import { useAuthStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,15 +34,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { NotificationCenter } from '@/components/notifications/NotificationCenter';
+import { NotificationBell } from '@/components/communication/NotificationBell';
 import { TaskForm } from '@/components/tasks/TaskForm';
 
 export function Header() {
   const { user, logout } = useAuthStore();
   const { theme, setTheme, sidebarCollapsed } = useUIStore();
-  const { unreadCount } = useNotificationStore();
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
   return (
     <header 
@@ -113,28 +109,7 @@ export function Header() {
           </Dialog>
 
           {/* Notifications */}
-          <Dialog open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-              >
-                <Bell className="w-5 h-5" />
-                {unreadCount > 0 && (
-                  <Badge 
-                    variant="destructive" 
-                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-                  >
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Badge>
-                )}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px] p-0">
-              <NotificationCenter />
-            </DialogContent>
-          </Dialog>
+          <NotificationBell />
 
           {/* User Menu */}
           <DropdownMenu>

@@ -1,6 +1,7 @@
 """Models package."""
 
 from app.models.board import Board, BoardColumn, BoardSwimlane
+from app.models.communication import CommentReaction, EmailLog, EmailStatus
 from app.models.milestone import Milestone, MilestoneRisk, MilestoneStatus, MilestoneType
 from app.models.notification import Notification, NotificationPreference
 from app.models.project import (
@@ -64,6 +65,7 @@ __all__ = [
     "Milestone", "MilestoneType", "MilestoneStatus", "MilestoneRisk",
     "WorkflowTemplate", "WorkflowStage", "WorkflowTransition", "WorkflowTemplateType",
     "Notification", "NotificationPreference",
+    "CommentReaction", "EmailLog", "EmailStatus",
     "LandingHero", "LandingFeature", "LandingBadge", "PricingTier",
     "PricingFeature", "FooterCategory", "FooterLink", "LandingLead",
 ]

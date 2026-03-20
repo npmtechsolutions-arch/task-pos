@@ -6,6 +6,7 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 interface AuthStore extends AuthState {
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
@@ -18,6 +19,7 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
+      token: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -29,7 +31,7 @@ export const useAuthStore = create<AuthStore>()(
       initAuth: async () => {
         const token = localStorage.getItem('token');
         if (!token) {
-          set({ isAuthenticated: false, user: null });
+          set({ isAuthenticated: false, user: null, token: null });
           return;
         }
 
@@ -56,7 +58,7 @@ export const useAuthStore = create<AuthStore>()(
           // Token is invalid or expired → clear session
           localStorage.removeItem('token');
           delete axios.defaults.headers.common['Authorization'];
-          set({ user: null, isAuthenticated: false });
+          set({ user: null, token: null, isAuthenticated: false });
         }
       },
 
@@ -89,6 +91,7 @@ export const useAuthStore = create<AuthStore>()(
 
           set({
             user: userObj as any,
+            token: access_token,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -108,6 +111,7 @@ export const useAuthStore = create<AuthStore>()(
         delete axios.defaults.headers.common['Authorization'];
         set({
           user: null,
+          token: null,
           isAuthenticated: false,
           error: null,
         });
@@ -134,6 +138,7 @@ export const useAuthStore = create<AuthStore>()(
       name: 'auth-session-v3',
       partialize: (state) => ({
         user: state.user,
+        token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
     }

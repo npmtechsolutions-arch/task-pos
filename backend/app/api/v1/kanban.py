@@ -130,6 +130,37 @@ async def _task_to_card(task: Task, db: AsyncSession) -> KanbanTaskCardResponse:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Board Init (auto-create default board for a project)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.post("/boards/init/{project_id}", status_code=status.HTTP_201_CREATED)
+async def init_project_board(
+    project_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Auto-initialize a Kanban board for a project.
+    Creates default columns (To Do, In Progress, Review, Done) if no board exists.
+    Returns the board_id whether newly created or already existing.
+    """
+    project_service = ProjectService(db)
+    if not await project_service.is_project_member(project_id, current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    board_service = BoardService(db)
+    existing = await board_service.get_by_project(project_id)
+    if existing:
+        return {"board_id": existing.id, "created": False, "message": "Board already exists"}
+
+    from app.schemas.board import BoardCreate
+    board = await board_service.create(
+        BoardCreate(project_id=project_id, name="Kanban Board", settings={})
+    )
+    return {"board_id": board.id, "created": True, "message": "Board initialized with default columns"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Board View
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -152,7 +183,11 @@ async def get_kanban_board(
     board_service = BoardService(db)
     board = await board_service.get_by_project(project_id)
     if not board:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Board not found. Create one first.")
+        # Auto-init board if missing (idempotent)
+        from app.schemas.board import BoardCreate
+        board = await board_service.create(
+            BoardCreate(project_id=project_id, name="Kanban Board", settings={})
+        )
 
     # Fetch all tasks in the project with their labels loaded
     tasks_result = await db.execute(
@@ -203,6 +238,8 @@ async def get_kanban_board(
         total_tasks=total_tasks,
         wip_limits_enabled=settings.get("wip_limits_enabled", False),
     )
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -208,6 +208,13 @@ class ProjectService:
         logger.info("Project deleted", project_id=project_id)
         return True
 
+    async def update_metrics(self, project_id: str) -> None:
+        """Update cached metrics for a project (stub).
+        Currently metrics are calculated dynamically in DashboardService, 
+        but this method is hooked into task CRUD operations.
+        """
+        pass
+
     # Member management
 
     async def add_member(
@@ -310,16 +317,21 @@ class ProjectService:
         self, project_id: str, user_id: str, min_role: ProjectMemberRole
     ) -> bool:
         """Check if user has at least the specified role in project."""
-        member = await self.get_member(project_id, user_id)
-        if not member:
-            return False
-
         role_hierarchy = {
             ProjectMemberRole.VIEWER: 1,
             ProjectMemberRole.MEMBER: 2,
             ProjectMemberRole.ADMIN: 3,
             ProjectMemberRole.OWNER: 4,
         }
+
+        # Project owner always has OWNER-level access, even without a member record
+        project = await self.get_by_id(project_id)
+        if project and str(project.owner_id) == str(user_id):
+            return role_hierarchy.get(ProjectMemberRole.OWNER, 0) >= role_hierarchy.get(min_role, 0)
+
+        member = await self.get_member(project_id, user_id)
+        if not member:
+            return False
 
         return role_hierarchy.get(member.role, 0) >= role_hierarchy.get(min_role, 0)
 

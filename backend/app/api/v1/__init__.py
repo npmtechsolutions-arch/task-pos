@@ -4,6 +4,8 @@ from fastapi import APIRouter
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.boards import router as boards_router
+from app.api.v1.comments import router as comments_router
+from app.api.v1.activity import router as activity_router
 from app.api.v1.critical_path import router as critical_path_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.kanban import router as kanban_router
@@ -44,3 +46,6 @@ api_router.include_router(timesheets_router, prefix="/timesheets", tags=["timesh
 api_router.include_router(capacity_router, prefix="/capacity", tags=["capacity"])
 api_router.include_router(landing_router, prefix="/landing", tags=["landing"])
 api_router.include_router(landing_router, prefix="/onboarding", tags=["landing"])
+# Communication module
+api_router.include_router(comments_router, prefix="", tags=["comments"])
+api_router.include_router(activity_router, prefix="/activity", tags=["activity"])

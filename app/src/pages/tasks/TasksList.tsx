@@ -13,7 +13,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { cn, formatDueDate, getPriorityColor, getStatusBgColor, getStatusLabel } from '@/lib/utils';
-import { useTaskStore, useProjectStore, useUIStore } from '@/stores';
+import { useTaskStore, useProjectStore, useUIStore, useAuthStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -48,15 +48,29 @@ import type { Task } from '@/types';
 export function TasksList() {
   const { filters, setFilters, getFilteredTasks, fetchTasks, isLoading } = useTaskStore();
   const { projects, fetchProjects } = useProjectStore();
+  const { user } = useAuthStore();
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'calendar'>('board');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  // The project whose board is shown in board view
+  const [boardProjectId, setBoardProjectId] = useState<string>('');
 
-  // Load tasks AND projects from PostgreSQL on mount
+  // Load tasks assigned to current user + projects from PostgreSQL on mount
   useEffect(() => {
-    fetchTasks();
+    if (user?.id) {
+      // Always fetch tasks assigned to the current user by default
+      fetchTasks({ primary_assignee_id: user.id });
+    }
     if (projects.length === 0) fetchProjects();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // Auto-select first project for board view when projects load
+  useEffect(() => {
+    if (!boardProjectId && projects.length > 0) {
+      setBoardProjectId(projects[0].id);
+    }
+  }, [projects]);
 
   const filteredTasks = getFilteredTasks();
 
@@ -102,7 +116,11 @@ export function TasksList() {
                 Add a new task to your project.
               </DialogDescription>
             </DialogHeader>
-            <TaskForm onSuccess={() => setIsDialogOpen(false)} />
+            <TaskForm onSuccess={() => {
+              setIsDialogOpen(false);
+              // Re-fetch MY tasks so the new one shows up
+              if (user?.id) fetchTasks({ primary_assignee_id: user.id });
+            }} />
           </DialogContent>
         </Dialog>
       </div>
@@ -252,7 +270,29 @@ export function TasksList() {
           }
         />
       ) : viewMode === 'board' ? (
-        <KanbanBoard />
+        <div className="space-y-3">
+          {/* Project picker for board view */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500 font-medium">Project:</span>
+            <Select
+              value={boardProjectId || ''}
+              onValueChange={setBoardProjectId}
+            >
+              <SelectTrigger className="w-[220px] h-8 text-sm">
+                <SelectValue placeholder="Select a project…" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="font-mono text-xs text-indigo-600 mr-1">{p.key}</span>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <KanbanBoard projectId={boardProjectId || undefined} />
+        </div>
       ) : viewMode === 'list' ? (
         <TaskListTable tasks={filteredTasks} />
       ) : (

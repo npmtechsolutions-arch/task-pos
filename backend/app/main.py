@@ -98,20 +98,76 @@ async def global_exception_handler(request, exc):
     )
 
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect, Query
 from app.websocket.manager import manager
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    await manager.connect(websocket, client_id)
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    user_id: str,
+    token: str = Query(None),
+):
+    """Authenticated WebSocket endpoint.
+    
+    Client connects with: ws://host/ws/{user_id}?token=<jwt>
+    Supports messages:
+      {type: 'join_room', room: 'task:uuid'}
+      {type: 'leave_room', room: 'task:uuid'}
+      {type: 'typing', room: 'task:uuid'}  → broadcasts to room (debounced on client)
+    """
+    # Auth: verify JWT token
+    if token:
+        try:
+            from app.core.security import decode_token
+            payload = decode_token(token)
+            token_user_id = payload.get("sub") or payload.get("user_id")
+            # Reject if token belongs to a different user
+            if token_user_id and token_user_id != user_id:
+                await websocket.close(code=4001)
+                return
+        except Exception:
+            await websocket.close(code=4001)
+            return
+
+    await manager.connect(websocket, user_id)
     try:
         while True:
-            data = await websocket.receive_text()
-            # For now, we only push data from the server, client just listens
+            import json
+            raw = await websocket.receive_text()
+            try:
+                data = json.loads(raw)
+            except Exception:
+                continue
+
+            msg_type = data.get("type")
+            room = data.get("room")
+
+            if msg_type == "join_room" and room:
+                await manager.join_room(user_id, room)
+                await websocket.send_json({"type": "joined", "room": room})
+
+            elif msg_type == "leave_room" and room:
+                await manager.leave_room(user_id, room)
+
+            elif msg_type == "typing" and room:
+                # Get user's name for typing indicator
+                actor_name = data.get("user_name", "Someone")
+                await manager.send_to_room_except(room, user_id, {
+                    "type": "typing",
+                    "room": room,
+                    "user_id": user_id,
+                    "user_name": actor_name,
+                })
+
+            elif msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+
     except WebSocketDisconnect:
-        manager.disconnect(websocket, client_id)
-
-
+        manager.disconnect(websocket, user_id)
+        # Clean up all rooms this user was in
+        for room_name in list(manager.rooms.keys()):
+            manager.rooms.get(room_name, set()).discard(user_id)
 
 if __name__ == "__main__":
     import uvicorn

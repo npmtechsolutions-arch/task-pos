@@ -3,16 +3,16 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Clock, User, Calendar, Flag, MessageSquare,
   Timer, GitBranch, Trash2, Plus, CheckCircle2, Circle,
-  AlertCircle, Loader2, Edit2, ChevronRight,
+  AlertCircle, Loader2, ChevronRight,
   Tag, Hash
 } from 'lucide-react';
 import { useTaskStore, useUIStore, useAuthStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn, getStatusBgColor, getStatusLabel, getPriorityColor } from '@/lib/utils';
+import { CommentsSection } from '@/components/communication/CommentsSection';
 
 type Tab = 'details' | 'subtasks' | 'comments' | 'timelog';
 
@@ -36,7 +36,6 @@ const PRIORITY_BADGES: Record<string, string> = {
 export function TaskDetail() {
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
   const {
     currentTask,
     isLoadingDetail,
@@ -54,8 +53,6 @@ export function TaskDetail() {
   const { addToast } = useUIStore();
 
   const [activeTab, setActiveTab] = useState<Tab>('details');
-  const [comment, setComment] = useState('');
-  const [isCommenting, setIsCommenting] = useState(false);
   const [logHours, setLogHours] = useState('');
   const [logDesc, setLogDesc] = useState('');
   const [isLoggingTime, setIsLoggingTime] = useState(false);
@@ -84,30 +81,6 @@ export function TaskDetail() {
       addToast({ type: 'error', title: 'Update failed', message: 'Could not update status.' });
     } finally {
       setIsTransitioning(false);
-    }
-  };
-
-  const handleAddComment = async () => {
-    if (!taskId || !comment.trim()) return;
-    setIsCommenting(true);
-    try {
-      await addCommentApi(taskId, { content: comment.trim() });
-      setComment('');
-      addToast({ type: 'success', title: 'Comment added' });
-    } catch {
-      addToast({ type: 'error', title: 'Failed to add comment' });
-    } finally {
-      setIsCommenting(false);
-    }
-  };
-
-  const handleDeleteComment = async (commentId: string) => {
-    if (!taskId || !window.confirm('Delete this comment?')) return;
-    try {
-      await deleteCommentApi(taskId, commentId);
-      addToast({ type: 'success', title: 'Comment deleted' });
-    } catch {
-      addToast({ type: 'error', title: 'Failed to delete comment' });
     }
   };
 
@@ -330,15 +303,7 @@ export function TaskDetail() {
           />
         )}
         {activeTab === 'comments' && (
-          <CommentsTab
-            comments={comments}
-            comment={comment}
-            setComment={setComment}
-            isCommenting={isCommenting}
-            currentUserId={user?.id}
-            onSubmit={handleAddComment}
-            onDelete={handleDeleteComment}
-          />
+          <CommentsSection taskId={taskId!} projectId={task.projectId} />
         )}
         {activeTab === 'timelog' && (
           <TimeLogTab
@@ -514,79 +479,6 @@ function SubtasksTab({ subtasks, newSubtaskTitle, setNewSubtaskTitle, isAddingSu
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ─── Comments Tab ────────────────────────────────────────────────────────── */
-
-function CommentsTab({ comments, comment, setComment, isCommenting, currentUserId, onSubmit, onDelete }: any) {
-  return (
-    <div className="space-y-4">
-      {/* Comment list */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        {comments.length === 0 ? (
-          <p className="text-gray-400 text-sm italic text-center py-6">No comments yet. Be the first.</p>
-        ) : (
-          <div className="space-y-4">
-            {comments.map((c: any) => (
-              <div key={c.id} className="flex gap-3 group">
-                <Avatar className="w-8 h-8 flex-shrink-0">
-                  <AvatarFallback className="text-xs bg-indigo-100 text-indigo-600">
-                    {(c.author?.firstName?.[0] ?? c.author?.first_name?.[0] ?? '?')}
-                    {(c.author?.lastName?.[0] ?? c.author?.last_name?.[0] ?? '')}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-sm text-gray-800">
-                      {c.author?.firstName ?? c.author?.first_name} {c.author?.lastName ?? c.author?.last_name}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {new Date(c.createdAt ?? c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {c.isEdited && <span className="text-xs text-gray-400 italic">(edited)</span>}
-                  </div>
-                  <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{c.content}</p>
-                </div>
-                {(c.authorId === currentUserId || c.author_id === currentUserId) && (
-                  <button
-                    onClick={() => onDelete(c.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 mt-0.5"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Add comment */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-1.5">
-          <Edit2 className="w-3.5 h-3.5" /> Add Comment
-        </h4>
-        <Textarea
-          placeholder="Write a comment…"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={3}
-          className="resize-none mb-3"
-        />
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={onSubmit}
-            disabled={isCommenting || !comment.trim()}
-            className="bg-indigo-600 hover:bg-indigo-700"
-          >
-            {isCommenting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-            Post Comment
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

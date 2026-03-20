@@ -348,9 +348,14 @@ class TaskActivity(Base):
     task: Mapped["Task"] = relationship("Task", back_populates="activity_logs")
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id"), nullable=False, index=True
     )
     user: Mapped["User"] = relationship("User", lazy="selectin")
+
+    # project_id for fast project-scope activity queries
+    project_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=True, index=True
+    )
 
     action: Mapped[ActivityAction] = mapped_column(nullable=False)
 
@@ -388,12 +393,25 @@ class TaskComment(Base):
     mentions: Mapped[List[str]] = mapped_column(JSONB, default=list)
 
     # For threaded comments
-    parent_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("task_comments.id"))
+    parent_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("task_comments.id"), index=True
+    )
+    replies: Mapped[List["TaskComment"]] = relationship(
+        "TaskComment",
+        primaryjoin="TaskComment.parent_id == TaskComment.id",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
     is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
     edited_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Resolve/close thread
+    is_resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id"))
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

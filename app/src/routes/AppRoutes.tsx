@@ -11,6 +11,7 @@ import { LandingPage } from '@/pages/landing/LandingPage';
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import TimesheetsPage from '@/pages/timesheets/Timesheets';
 import { TaskDetail } from '@/pages/tasks/TaskDetail';
+import { ActivityFeed } from '@/pages/activity/ActivityFeed';
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -100,6 +101,17 @@ export function AppRoutes() {
       </Route>
 
       {/* Other protected pages */}
+      <Route
+        path="/activity"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ActivityFeed />} />
+      </Route>
+
       <Route
         path="/timesheets"
         element={

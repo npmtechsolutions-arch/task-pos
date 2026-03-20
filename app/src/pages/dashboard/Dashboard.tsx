@@ -17,37 +17,39 @@ import { TeamWidget } from '@/components/dashboard/TeamWidget';
 
 export function Dashboard() {
   const { user } = useAuthStore();
-  const { stats, fetchStats, isLoadingStats } = useDashboardStore();
+  const { stats, fetchAll } = useDashboardStore();
 
+  // Fetch both stats and project progress in parallel on mount
   useEffect(() => {
-    if (!stats && !isLoadingStats) {
-      fetchStats();
-    }
-  }, [stats, fetchStats, isLoadingStats]);
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!user?.id) return;
-    
-    // Connect to global WebSocket manager
+
     const wsUrl = `ws://localhost:8000/ws/${user.id}`;
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket | null = null;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'dashboard_update' && data.action === 'reload') {
-          console.log("WebSocket triggered dashboard reload");
-          fetchStats(); // Instantly refresh 
+    const connect = () => {
+      ws = new WebSocket(wsUrl);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'dashboard_update' && data.action === 'reload') {
+            // Re-fetch in the background, no spinner
+            useDashboardStore.getState().fetchAll();
+          }
+        } catch {
+          // ignore parse errors
         }
-      } catch (err) {
-        console.error("Failed to parse websocket message", err);
-      }
+      };
+      ws.onerror = () => ws?.close();
     };
 
-    return () => {
-      ws.close();
-    };
-  }, [user?.id, fetchStats]);
+    connect();
+    return () => ws?.close();
+  }, [user?.id]);
 
   const defaultStats = {
     total_projects: 0,
