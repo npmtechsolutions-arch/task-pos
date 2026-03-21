@@ -409,7 +409,7 @@ async def update_time_entry(
 
 
 @router.delete(
-    "{task_id}/time-entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/{task_id}/time-entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def delete_time_entry(
     task_id: str,

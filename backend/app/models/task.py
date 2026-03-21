@@ -387,7 +387,7 @@ class TaskComment(Base):
     author_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=False
     )
-    author: Mapped["User"] = relationship("User", lazy="selectin")
+    author: Mapped["User"] = relationship("User", foreign_keys=[author_id], lazy="selectin")
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
     mentions: Mapped[List[str]] = mapped_column(JSONB, default=list)

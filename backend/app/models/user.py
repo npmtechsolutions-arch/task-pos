@@ -124,6 +124,7 @@ class User(Base):
     )
     comments: Mapped[List["TaskComment"]] = relationship(
         "TaskComment",
+        foreign_keys="TaskComment.author_id",
         back_populates="author",
         lazy="selectin",
     )

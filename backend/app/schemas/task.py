@@ -167,7 +167,7 @@ class TaskMoveRequest(BaseModel):
     """Task move request schema."""
 
     board_column_id: Optional[str] = None
-    position: float
+    new_position: float
 
 
 class TaskResponse(TaskBase):

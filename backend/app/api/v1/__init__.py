@@ -22,6 +22,10 @@ from app.api.v1.workflows import router as workflows_router
 from app.api.v1.timesheets import router as timesheets_router
 from app.api.v1.capacity import router as capacity_router
 from app.api.v1.landing import router as landing_router
+# ── Employee Management Module ──────────────────────────────────────────────
+from app.api.v1.employees import router as employees_router
+from app.api.v1.org_teams import router as org_teams_router
+from app.api.v1.rbac import router as rbac_router
 
 api_router = APIRouter()
 
@@ -46,6 +50,9 @@ api_router.include_router(timesheets_router, prefix="/timesheets", tags=["timesh
 api_router.include_router(capacity_router, prefix="/capacity", tags=["capacity"])
 api_router.include_router(landing_router, prefix="/landing", tags=["landing"])
 api_router.include_router(landing_router, prefix="/onboarding", tags=["landing"])
-# Communication module
 api_router.include_router(comments_router, prefix="", tags=["comments"])
 api_router.include_router(activity_router, prefix="/activity", tags=["activity"])
+# Employee Management Module
+api_router.include_router(employees_router, prefix="/employees", tags=["employees"])
+api_router.include_router(org_teams_router, prefix="/org-teams", tags=["org-teams"])
+api_router.include_router(rbac_router, prefix="/rbac", tags=["rbac"])

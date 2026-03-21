@@ -77,13 +77,15 @@ async def _log_activity(
     action: ActivityAction,
     description: str,
     metadata: dict = None,
+    project_id: str = None,
 ) -> None:
     log = TaskActivity(
         task_id=task_id,
         user_id=user_id,
         action=action,
         description=description,
-        metadata=metadata or {},
+        activity_metadata=metadata or {},
+        project_id=project_id,
     )
     db.add(log)
     # Note: caller must commit

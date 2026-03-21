@@ -208,13 +208,6 @@ class ProjectService:
         logger.info("Project deleted", project_id=project_id)
         return True
 
-    async def update_metrics(self, project_id: str) -> None:
-        """Update cached metrics for a project (stub).
-        Currently metrics are calculated dynamically in DashboardService, 
-        but this method is hooked into task CRUD operations.
-        """
-        pass
-
     # Member management
 
     async def add_member(

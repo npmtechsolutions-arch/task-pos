@@ -12,6 +12,13 @@ import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import TimesheetsPage from '@/pages/timesheets/Timesheets';
 import { TaskDetail } from '@/pages/tasks/TaskDetail';
 import { ActivityFeed } from '@/pages/activity/ActivityFeed';
+// Employee Management Module
+import { PeoplePage } from '@/pages/people/PeoplePage';
+import { EmployeeProfile } from '@/pages/people/EmployeeProfile';
+import { SkillMatrix } from '@/pages/people/SkillMatrix';
+import { CapacityPlanning } from '@/pages/people/CapacityPlanning';
+import '@/pages/people/people.css';
+
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -131,8 +138,24 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<div className="p-6 text-gray-500">Team page coming soon...</div>} />
+        <Route index element={<Navigate to="/people" replace />} />
       </Route>
+
+      {/* People / Employee Management */}
+      <Route
+        path="/people"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<PeoplePage />} />
+        <Route path=":userId" element={<EmployeeProfile />} />
+        <Route path="skills" element={<SkillMatrix />} />
+        <Route path="capacity" element={<CapacityPlanning />} />
+      </Route>
+
 
       <Route
         path="/calendar"

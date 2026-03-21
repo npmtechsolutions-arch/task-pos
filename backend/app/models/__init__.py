@@ -50,7 +50,39 @@ from app.models.landing import (
     LandingLead,
 )
 
+# ── Employee Management Module ──────────────────────────────────────
+from app.models.employee import (
+    EmployeeProfile,
+    Skill,
+    SkillCategory,
+    UserSkill,
+    ValidationStatus,
+)
+from app.models.org_team import (
+    OrgTeam,
+    OrgTeamMember,
+    OrgTeamMemberRole,
+    OrgTeamType,
+    ReportingStructure,
+)
+from app.models.rbac import (
+    ActionType,
+    Permission,
+    ResourceType,
+    Role,
+    RolePermission,
+    RoleScopeType,
+    ScopeType,
+    UserRole as UserRoleAssignment,
+)
+from app.models.capacity import (
+    AvailabilityStatus,
+    UserAvailability,
+    UserCapacity,
+)
+
 __all__ = [
+    # Core
     "User", "UserRole", "UserStatus",
     "Project", "ProjectMember", "ProjectMemberRole", "ProjectStatus",
     "ProjectVisibility", "ProjectPhase", "PhaseStatus",
@@ -68,4 +100,10 @@ __all__ = [
     "CommentReaction", "EmailLog", "EmailStatus",
     "LandingHero", "LandingFeature", "LandingBadge", "PricingTier",
     "PricingFeature", "FooterCategory", "FooterLink", "LandingLead",
+    # Employee Management Module
+    "EmployeeProfile", "Skill", "SkillCategory", "UserSkill", "ValidationStatus",
+    "OrgTeam", "OrgTeamMember", "OrgTeamMemberRole", "OrgTeamType", "ReportingStructure",
+    "Role", "Permission", "RolePermission", "UserRoleAssignment",
+    "ResourceType", "ActionType", "ScopeType", "RoleScopeType",
+    "UserCapacity", "UserAvailability", "AvailabilityStatus",
 ]
