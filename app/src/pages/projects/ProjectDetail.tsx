@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Settings, Users, Flag, BarChart3, GitBranch,
@@ -296,7 +297,7 @@ export function ProjectDetail() {
           <CriticalPathView projectId={project.id} />
         )}
         {activeTab === 'team' && (
-          <TeamPanel members={project.members ?? []} />
+          <TeamPanel members={project.members ?? []} projectId={project.id} />
         )}
         {activeTab === 'settings' && (
           <SettingsPanel project={project} />
@@ -399,12 +400,123 @@ function ProjectOverview({ project, budgetUtil }: { project: any; budgetUtil: nu
   );
 }
 
-function TeamPanel({ members }: { members: any[] }) {
+function TeamPanel({ members: initialMembers, projectId }: { members: any[]; projectId: string }) {
+  const [members, setMembers] = useState<any[]>(initialMembers);
+  const [showModal, setShowModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [role, setRole] = useState('member');
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [modalError, setModalError] = useState('');
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const searchUsers = async (q: string) => {
+    if (!q.trim()) { setSearchResults([]); return; }
+    try {
+      const res = await axios.get(`${API_URL}/users?search=${encodeURIComponent(q)}&per_page=10`, { headers: getAuthHeader() });
+      setSearchResults(res.data?.items || res.data || []);
+    } catch { setSearchResults([]); }
+  };
+
+  const handleAdd = async () => {
+    if (!selectedUser) { setModalError('Select a user first'); return; }
+    setSaving(true); setModalError('');
+    try {
+      const res = await axios.post(`${API_URL}/projects/${projectId}/members`,
+        { user_id: selectedUser.id, role },
+        { headers: getAuthHeader() }
+      );
+      setMembers(prev => [...prev, res.data]);
+      setShowModal(false); setSelectedUser(null); setSearchQuery(''); setSearchResults([]); setRole('member');
+    } catch (e: any) {
+      setModalError(e.response?.data?.detail ?? e.message ?? 'Failed to add member');
+    } finally { setSaving(false); }
+  };
+
+  const handleRemove = async (userId: string) => {
+    if (!window.confirm('Remove this member from the project?')) return;
+    setRemoving(userId);
+    try {
+      await axios.delete(`${API_URL}/projects/${projectId}/members/${userId}`, { headers: getAuthHeader() });
+      setMembers(prev => prev.filter(m => (m.user_id ?? m.user?.id) !== userId));
+    } catch (e: any) {
+      alert(e.response?.data?.detail ?? e.message ?? 'Failed to remove member');
+    } finally { setRemoving(null); }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+      {/* Add Member Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-500" /> Add Member
+              </h3>
+              <button onClick={() => { setShowModal(false); setModalError(''); setSelectedUser(null); setSearchQuery(''); setSearchResults([]); }}
+                className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              {modalError && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{modalError}</div>}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search User</label>
+                <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  placeholder="Type name or email…"
+                  value={searchQuery}
+                  onChange={e => { setSearchQuery(e.target.value); searchUsers(e.target.value); setSelectedUser(null); }}
+                />
+                {searchResults.length > 0 && !selectedUser && (
+                  <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden shadow-sm max-h-40 overflow-y-auto">
+                    {searchResults.map(u => (
+                      <button key={u.id} type="button"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-indigo-50 text-left transition-colors"
+                        onClick={() => { setSelectedUser(u); setSearchQuery(`${u.first_name} ${u.last_name} (${u.email})`); setSearchResults([]); }}>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                          {(u.first_name?.[0] ?? '?')}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</p>
+                          <p className="text-xs text-gray-400">{u.email}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  value={role} onChange={e => setRole(e.target.value)}>
+                  <option value="member">Member</option>
+                  <option value="lead">Lead</option>
+                  <option value="admin">Admin</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowModal(false)}
+                  className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={handleAdd} disabled={!selectedUser || saving}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</> : 'Add Member'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-bold text-gray-800">Team Members ({members.length})</h2>
-        <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+        <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => setShowModal(true)}>
           <Plus className="w-4 h-4 mr-1" /> Add Member
         </Button>
       </div>
@@ -412,29 +524,35 @@ function TeamPanel({ members }: { members: any[] }) {
         <div className="text-center py-12 text-gray-400">
           <Users className="w-10 h-10 mx-auto mb-2 opacity-50" />
           <p>No team members yet</p>
+          <button onClick={() => setShowModal(true)} className="mt-3 text-indigo-600 text-sm hover:underline">+ Add first member</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {members.map((member) => (
-            <div
-              key={member.user_id ?? member.id}
-              className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
-            >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold">
-                {(member.user?.firstName ?? member.user?.first_name ?? '?')[0]}
-                {(member.user?.lastName ?? member.user?.last_name ?? '')[0]}
+          {members.map((member) => {
+            const uid = member.user_id ?? member.user?.id ?? member.id;
+            return (
+              <div key={uid} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors group">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                  {(member.user?.firstName ?? member.user?.first_name ?? '?')[0]}
+                  {(member.user?.lastName ?? member.user?.last_name ?? '')[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-800 text-sm truncate">
+                    {member.user?.firstName ?? member.user?.first_name}{' '}
+                    {member.user?.lastName ?? member.user?.last_name}
+                  </p>
+                  <Badge variant="secondary" className="text-[10px] capitalize">{member.role}</Badge>
+                </div>
+                {removing === uid ? (
+                  <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />
+                ) : (
+                  <button onClick={() => handleRemove(uid)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 p-1 rounded"
+                    title="Remove member">✕</button>
+                )}
               </div>
-              <div>
-                <p className="font-medium text-gray-800 text-sm">
-                  {member.user?.firstName ?? member.user?.first_name}{' '}
-                  {member.user?.lastName ?? member.user?.last_name}
-                </p>
-                <Badge variant="secondary" className="text-[10px] capitalize">
-                  {member.role}
-                </Badge>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -442,37 +560,144 @@ function TeamPanel({ members }: { members: any[] }) {
 }
 
 function SettingsPanel({ project }: { project: any }) {
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // Determine current user's role
+  const storedUser = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+  const userRole: string = storedUser?.role ?? '';
+  const memberRole = project.members?.find((m: any) => m.user_id === storedUser?.id)?.role;
+  const canEdit = ['admin', 'owner', 'manager'].includes(userRole) || ['admin', 'owner'].includes(memberRole);
+
+  const [form, setForm] = useState({
+    name: project.name ?? '',
+    department: project.department ?? '',
+    client_name: project.clientName ?? project.client_name ?? '',
+    budget: project.budget ?? '',
+    visibility: project.visibility ?? 'private',
+    start_date: project.startDate ? project.startDate.slice(0, 10) : '',
+    end_date: project.endDate ? project.endDate.slice(0, 10) : '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(prev => ({ ...prev, [k]: e.target.value }));
+
+  const handleSave = async () => {
+    setSaving(true); setSaveError(''); setSaved(false);
+    try {
+      await axios.put(`${API_URL}/projects/${project.id}`, {
+        name: form.name || undefined,
+        department: form.department || undefined,
+        client_name: form.client_name || undefined,
+        budget: form.budget ? Number(form.budget) : undefined,
+        visibility: form.visibility,
+        start_date: form.start_date ? new Date(form.start_date).toISOString() : undefined,
+        end_date: form.end_date ? new Date(form.end_date).toISOString() : undefined,
+      }, { headers });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      setSaveError(e.response?.data?.detail ?? e.message ?? 'Save failed');
+    } finally { setSaving(false); }
+  };
+
+  if (!canEdit) {
+    // Read-only view for members/viewers
+    return (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4 max-w-2xl">
+        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+          <Settings className="w-5 h-5 text-gray-500" /> Project Settings
+          <span className="ml-auto text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Read Only</span>
+        </h2>
+        <div className="space-y-1 text-sm">
+          {[
+            { label: 'Project Name', value: project.name },
+            { label: 'Department', value: project.department ?? '—' },
+            { label: 'Client', value: project.clientName ?? project.client_name ?? '—' },
+            { label: 'Budget', value: project.budget ? `$${Number(project.budget).toLocaleString()}` : '—' },
+            { label: 'Visibility', value: project.visibility },
+            { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString() : '—' },
+            { label: 'End Date', value: project.endDate ? new Date(project.endDate).toLocaleDateString() : '—' },
+            { label: 'Project ID', value: project.id },
+          ].map(row => (
+            <div key={row.label} className="flex justify-between py-3 border-b border-gray-50">
+              <span className="text-gray-500">{row.label}</span>
+              <span className="font-medium text-gray-800 font-mono text-xs">{row.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6 max-w-2xl">
-      <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-        <Settings className="w-5 h-5 text-gray-500" /> Project Settings
-      </h2>
-      <div className="space-y-4 text-sm">
-        {[
-          { label: 'Department', value: project.department ?? '—' },
-          { label: 'Business Unit', value: project.businessUnit ?? project.business_unit ?? '—' },
-          { label: 'Client', value: project.clientName ?? project.client_name ?? '—' },
-          { label: 'Budget', value: project.budget ? `$${project.budget.toLocaleString()}` : '—' },
-          { label: 'Budget Spent', value: project.budgetSpent != null ? `$${project.budgetSpent.toLocaleString()}` : '—' },
-        ].map((row) => (
-          <div key={row.label} className="flex justify-between py-3 border-b border-gray-100">
-            <span className="text-gray-500">{row.label}</span>
-            <span className="font-medium text-gray-800">{row.value}</span>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 max-w-2xl">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+          <Settings className="w-5 h-5 text-gray-500" /> Project Settings
+        </h2>
+        {saved && <span className="text-green-600 text-sm font-medium flex items-center gap-1">✓ Saved</span>}
+      </div>
+
+      {saveError && (
+        <div className="mb-4 text-sm text-red-600 bg-red-50 rounded-lg p-3">{saveError}</div>
+      )}
+
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.name} onChange={set('name')} placeholder="Project name" />
           </div>
-        ))}
-        <div className="flex justify-between py-3 border-b border-gray-100">
-          <span className="text-gray-500">Visibility</span>
-          <Badge variant="secondary" className="capitalize">{project.visibility}</Badge>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.department} onChange={set('department')} placeholder="Engineering, Marketing…" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.client_name} onChange={set('client_name')} placeholder="Client name" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Budget ($)</label>
+            <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.budget} onChange={set('budget')} placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.start_date} onChange={set('start_date')} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              value={form.end_date} onChange={set('end_date')} />
+          </div>
         </div>
-        <div className="flex justify-between py-3 border-b border-gray-100">
-          <span className="text-gray-500">Project ID</span>
-          <span className="font-mono text-xs text-gray-500">{project.id}</span>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Visibility</label>
+          <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            value={form.visibility} onChange={set('visibility')}>
+            <option value="private">Private</option>
+            <option value="internal">Internal</option>
+            <option value="public">Public</option>
+          </select>
         </div>
-        <div className="flex justify-between py-3 border-b border-gray-100">
-          <span className="text-gray-500">Created</span>
-          <span className="text-gray-700">
-            {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : '—'}
-          </span>
+
+        <div className="border-t border-gray-100 pt-4 flex items-center justify-between">
+          <div className="text-xs text-gray-400">
+            Project ID: <code className="font-mono">{project.id}</code>
+          </div>
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-60">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Save Changes'}
+          </button>
         </div>
       </div>
     </div>

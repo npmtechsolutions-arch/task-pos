@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GitBranch, AlertTriangle, Zap, Clock, ChevronRight, RefreshCw } from 'lucide-react';
+import { GitBranch, Zap, Clock, ChevronRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -99,15 +99,32 @@ export function CriticalPathView({ projectId }: CriticalPathViewProps) {
   if (!data || data.error) {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-        <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto mb-3" />
-        <h3 className="font-semibold text-gray-700 mb-1">
-          {data?.error === 'circular_dependency' ? 'Circular Dependency Detected!' : 'No task data available'}
-        </h3>
-        <p className="text-gray-400 text-sm max-w-sm mx-auto">
+        <GitBranch className="w-14 h-14 text-indigo-200 mx-auto mb-4" />
+        <h3 className="font-semibold text-gray-700 mb-2 text-lg">
           {data?.error === 'circular_dependency'
-            ? 'Two or more tasks create a circular dependency chain. Please fix the dependencies to use critical path analysis.'
-            : 'Create tasks and set up dependencies to compute the critical path.'}
+            ? '⚠️ Circular Dependency Detected!'
+            : 'Critical Path Not Available Yet'}
+        </h3>
+        <p className="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed mb-6">
+          {data?.error === 'circular_dependency'
+            ? 'Two or more tasks create a circular dependency chain. Fix task dependencies first.'
+            : 'To use critical path analysis, you need at least 2 tasks with:\n① Estimated duration (hours)\n② Dependencies set between tasks'}
         </p>
+        {data?.error !== 'circular_dependency' && (
+          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 max-w-xs mx-auto text-left text-sm text-indigo-700 mb-6">
+            <p className="font-semibold mb-1">Quick Start:</p>
+            <ol className="list-decimal list-inside space-y-1 text-xs">
+              <li>Go to the <strong>Tasks</strong> tab → create at least 2 tasks</li>
+              <li>Set an <strong>Estimated Hours</strong> on each task</li>
+              <li>On a task, add <strong>Dependencies</strong> to another task</li>
+              <li>Come back here and click <strong>Refresh</strong></li>
+            </ol>
+          </div>
+        )}
+        <button onClick={fetchCriticalPath}
+          className="flex items-center gap-2 mx-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-semibold transition-colors">
+          <RefreshCw className="w-4 h-4" /> Refresh
+        </button>
       </div>
     );
   }

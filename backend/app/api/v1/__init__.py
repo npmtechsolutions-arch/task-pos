@@ -52,7 +52,16 @@ api_router.include_router(landing_router, prefix="/landing", tags=["landing"])
 api_router.include_router(landing_router, prefix="/onboarding", tags=["landing"])
 api_router.include_router(comments_router, prefix="", tags=["comments"])
 api_router.include_router(activity_router, prefix="/activity", tags=["activity"])
-# Employee Management Module
+# ── Analytics & Reporting Module ───────────────────────────────────────────────
+from app.api.v1.analytics import router as analytics_router
+from app.api.v1.admin import router as admin_router
+from app.api.v1.hr import router as hr_router
+from app.api.v1.calendar_api import router as calendar_router
+
 api_router.include_router(employees_router, prefix="/employees", tags=["employees"])
 api_router.include_router(org_teams_router, prefix="/org-teams", tags=["org-teams"])
 api_router.include_router(rbac_router, prefix="/rbac", tags=["rbac"])
+api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
+api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
+api_router.include_router(hr_router, prefix="/hr", tags=["hr"])
+api_router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])

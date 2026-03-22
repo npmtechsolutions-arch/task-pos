@@ -23,9 +23,12 @@ async def lifespan(app: FastAPI):
     # Auto-create tables in development
     from app.db.base import Base
     from app.db.session import engine
+    # Ensure all models are imported so SQLAlchemy creates their tables
+    import app.models.calendar  # noqa: F401
+    import app.models.hr_hierarchy  # noqa: F401
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all, checkfirst=True)
         logger.info("Database tables created/verified")
 
     yield

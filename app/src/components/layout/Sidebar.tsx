@@ -12,7 +12,8 @@ import {
   ChevronRight,
   LogOut,
   Plus,
-  Clock
+  Clock,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUIStore, useProjectStore } from '@/stores';
@@ -40,12 +41,14 @@ const navigation = [
   { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
   { name: 'Team', href: '/team', icon: Users },
+  { name: 'HR & Org', href: '/hr', icon: Users },
   { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
 ];
 
 const bottomNavigation = [
   { name: 'Landing Admin', href: '/dashboard/admin', icon: LayoutDashboard },
+  { name: 'Super Admin', href: '/admin/super', icon: ShieldCheck },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

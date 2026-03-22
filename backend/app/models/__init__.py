@@ -106,4 +106,18 @@ __all__ = [
     "Role", "Permission", "RolePermission", "UserRoleAssignment",
     "ResourceType", "ActionType", "ScopeType", "RoleScopeType",
     "UserCapacity", "UserAvailability", "AvailabilityStatus",
+    # Analytics & Reporting Module
+    "SavedReport", "ReportSchedule", "ReportArchive", "DashboardConfig",
+    "ReportFrequency", "ExportFormat", "RetentionTier",
 ]
+
+# ── Analytics & Reporting Module ────────────────────────────────────
+from app.models.analytics import (  # noqa: E402
+    DashboardConfig,
+    ExportFormat,
+    ReportArchive,
+    ReportFrequency,
+    ReportSchedule,
+    RetentionTier,
+    SavedReport,
+)

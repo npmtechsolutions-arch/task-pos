@@ -18,7 +18,16 @@ import { EmployeeProfile } from '@/pages/people/EmployeeProfile';
 import { SkillMatrix } from '@/pages/people/SkillMatrix';
 import { CapacityPlanning } from '@/pages/people/CapacityPlanning';
 import '@/pages/people/people.css';
-
+// Analytics & Reports Module
+import { ReportsPage } from '@/pages/reports/ReportsPage';
+import { ReportBuilder } from '@/pages/reports/ReportBuilder';
+import { ReportHistory } from '@/pages/reports/ReportHistory';
+// Calendar
+import { CalendarPage } from '@/pages/calendar/CalendarPage';
+// Super Admin
+import { SuperAdminPage } from '@/pages/admin/SuperAdminPage';
+// HR
+import { HRPage } from '@/pages/hr/HRPage';
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -165,7 +174,7 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<div className="p-6 text-gray-500">Calendar coming soon...</div>} />
+        <Route index element={<CalendarPage />} />
       </Route>
 
       <Route
@@ -176,7 +185,9 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<div className="p-6 text-gray-500">Reports coming soon...</div>} />
+        <Route index element={<ReportsPage />} />
+        <Route path="builder" element={<ReportBuilder />} />
+        <Route path="history" element={<ReportHistory />} />
       </Route>
 
       <Route
@@ -195,6 +206,30 @@ export function AppRoutes() {
 
       {/* Catch-all → back to landing */}
       <Route path="*" element={<Navigate to="/" replace />} />
+
+      {/* Super Admin */}
+      <Route
+        path="/admin/super"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<SuperAdminPage />} />
+      </Route>
+
+      {/* HR & Organisation */}
+      <Route
+        path="/hr"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<HRPage />} />
+      </Route>
     </Routes>
   );
 }

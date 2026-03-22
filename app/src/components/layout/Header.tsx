@@ -111,7 +111,23 @@ export function Header() {
           {/* Notifications */}
           <NotificationBell />
 
-          {/* User Menu */}
+          {/* ── Theme Toggle Switch ─────────────────── */}
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="relative flex items-center w-14 h-7 rounded-full border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 overflow-hidden select-none"
+            aria-label="Toggle dark mode"
+          >
+            {/* Track icons */}
+            <Sun className="absolute left-1.5 w-3.5 h-3.5 text-amber-500 transition-opacity duration-200" style={{ opacity: theme === 'light' ? 1 : 0.3 }} />
+            <Moon className="absolute right-1.5 w-3.5 h-3.5 text-indigo-400 transition-opacity duration-200" style={{ opacity: theme === 'dark' ? 1 : 0.3 }} />
+            {/* Sliding indicator */}
+            <span
+              className="absolute top-0.5 w-6 h-6 rounded-full bg-white dark:bg-indigo-600 shadow-md transform transition-transform duration-300"
+              style={{ left: theme === 'dark' ? 'calc(100% - 1.625rem)' : '0.125rem' }}
+            />
+          </button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-9 w-9 rounded-full">
