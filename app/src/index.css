@@ -73,3 +73,39 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Global dark-mode overrides for hard-coded utility classes ────────────────
+   Components use bg-white / text-gray-900 / border-gray-200 etc.
+   These overrides make them respect dark mode automatically.
+*/
+.dark .bg-white        { background-color: hsl(222 47% 11%) !important; }
+.dark .bg-gray-50      { background-color: hsl(222 47% 9%) !important; }
+.dark .bg-gray-100     { background-color: hsl(222 47% 14%) !important; }
+.dark .bg-gray-200     { background-color: hsl(222 47% 17%) !important; }
+.dark .text-gray-400   { color: hsl(220 13% 55%) !important; }
+.dark .text-gray-500   { color: hsl(220 13% 60%) !important; }
+.dark .text-gray-600   { color: hsl(220 13% 70%) !important; }
+.dark .text-gray-700   { color: hsl(220 13% 75%) !important; }
+.dark .text-gray-800   { color: hsl(220 13% 80%) !important; }
+.dark .text-gray-900   { color: hsl(220 13% 90%) !important; }
+.dark .border-gray-100 { border-color: hsl(222 20% 18%) !important; }
+.dark .border-gray-200 { border-color: hsl(222 20% 20%) !important; }
+.dark .divide-gray-200 > * + * { border-color: hsl(222 20% 20%) !important; }
+.dark .bg-indigo-50    { background-color: hsl(238 75% 12%) !important; }
+.dark .bg-blue-50      { background-color: hsl(214 75% 10%) !important; }
+.dark .bg-green-50     { background-color: hsl(142 55% 8%) !important; }
+.dark .bg-red-50       { background-color: hsl(0 62% 10%) !important; }
+.dark .bg-amber-50     { background-color: hsl(45 90% 8%) !important; }
+
+/* Table rows in dark mode */
+.dark table thead { background-color: hsl(222 47% 9%) !important; }
+.dark table thead th { color: hsl(220 13% 65%) !important; }
+.dark table tbody tr:hover > td { background-color: hsl(222 47% 13%) !important; }
+
+/* Card backgrounds */
+.dark .rounded-lg.border,
+.dark .rounded-2xl.border,
+.dark .rounded-xl.border {
+  background-color: hsl(222 47% 11%);
+  border-color: hsl(222 20% 20%);
+}

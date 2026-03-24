@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { CalendarIcon, Clock, User, GitBranch, Loader2, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useTaskStore, useProjectStore, useUIStore } from '@/stores';
+import { useTaskStore, useProjectStore, useUIStore, useAuthStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -74,6 +74,7 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
   const { createTask } = useTaskStore();
   const { projects, fetchProjects } = useProjectStore();
   const { addToast } = useUIStore();
+  const { user } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId || '');
   const [members, setMembers] = useState<Member[]>([]);
@@ -92,6 +93,7 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
       priority: 'medium',
       projectId: defaultProjectId || '',
       parentId: parentId || undefined,
+      primaryAssigneeId: user?.id || undefined,
     },
   });
 
@@ -115,13 +117,31 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
       .get(`${API_URL}/projects/${selectedProjectId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       })
-      .then((res) => {
+      .then(async (res) => {
         const projectMembers: Member[] = (res.data.members ?? []).map((m: any) => ({
           id: m.user_id ?? m.user?.id,
           firstName: m.user?.first_name ?? m.user?.firstName ?? '',
           lastName: m.user?.last_name ?? m.user?.lastName ?? '',
         }));
-        setMembers(projectMembers);
+        
+        if (projectMembers.length > 0) {
+          setMembers(projectMembers);
+        } else {
+          try {
+            const allUsersRes = await axios.get(`${API_URL}/users`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+            });
+            const usersList = allUsersRes.data?.items || allUsersRes.data || [];
+            setMembers(usersList.map((u: any) => ({
+              id: u.id,
+              firstName: u.first_name || u.firstName || '',
+              lastName: u.last_name || u.lastName || ''
+            })));
+          } catch (e) {
+            console.error('Failed fallback users fetch:', e);
+            setMembers([]);
+          }
+        }
       })
       .catch((err) => {
         console.error('Failed to fetch project members:', err);

@@ -1,5 +1,9 @@
 """Script to completely drop and recreate all tables in the remote database."""
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
+
 import asyncio
 import logging
 from sqlalchemy import text
@@ -30,14 +34,6 @@ async def reset_database():
     try:
         async with engine.begin() as conn:
             # PostgreSQL specific: drop all tables in public schema cascade
-            logger.info("Terminating other connections...")
-            await conn.execute(text('''
-                SELECT pg_terminate_backend(pg_stat_activity.pid)
-                FROM pg_stat_activity
-                WHERE pg_stat_activity.datname = current_database()
-                  AND pid <> pg_backend_pid();
-            '''))
-            
             logger.info("Dropping all existing tables with CASCADE...")
             await conn.execute(text("DROP SCHEMA public CASCADE;"))
             await conn.execute(text("CREATE SCHEMA public;"))

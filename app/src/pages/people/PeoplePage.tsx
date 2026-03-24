@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { EmptyState } from '@/components/common/EmptyState';
+import { Users } from 'lucide-react';
+import { useEmployeeStore } from '@/stores';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -56,31 +59,16 @@ function UtilizationBar({ userId }: { userId: string }) {
 
 export function PeoplePage() {
   const navigate = useNavigate();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { employees, isLoading, fetchEmployees, fetchTeams } = useEmployeeStore();
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('');
-  const [departments, setDepartments] = useState<string[]>([]);
+  
+  const departments = Array.from(new Set(employees.map(e => e.department).filter(Boolean))) as string[];
 
   useEffect(() => {
-    load();
+    fetchEmployees(search, department);
+    fetchTeams();
   }, [search, department]);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ per_page: '50' });
-      if (search) params.append('search', search);
-      if (department) params.append('department', department);
-      const r = await axios.get(`${API}/employees?${params}`, { headers: headers() });
-      const items: Employee[] = r.data.items;
-      setEmployees(items);
-      const depts = Array.from(new Set(items.map(e => e.department).filter(Boolean))) as string[];
-      setDepartments(depts);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="people-page">
@@ -119,11 +107,17 @@ export function PeoplePage() {
         </select>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="people-loading">
           <div className="people-spinner" />
           <span>Loading employees…</span>
         </div>
+      ) : employees.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="No employees found"
+          description="It looks like there are no employees or team members matching this filter."
+        />
       ) : (
         <div className="people-grid">
           {employees.map(emp => (
@@ -152,7 +146,7 @@ export function PeoplePage() {
               <UtilizationBar userId={emp.id} />
 
               <div className="people-skills-row">
-                {emp.skills.slice(0, 4).map(us => (
+                {(emp.skills || []).slice(0, 4).map(us => (
                   <span
                     key={us.skill.name}
                     className="people-skill-chip"
@@ -162,8 +156,8 @@ export function PeoplePage() {
                     {us.skill.name}
                   </span>
                 ))}
-                {emp.skills.length > 4 && (
-                  <span className="people-skill-more">+{emp.skills.length - 4}</span>
+                {(emp.skills || []).length > 4 && (
+                  <span className="people-skill-more">+{(emp.skills || []).length - 4}</span>
                 )}
               </div>
             </div>

@@ -7,4 +7,4 @@ export { useDashboardStore } from './dashboardStore';
 export { useTeamStore } from './teamStore';
 export { useKanbanStore } from './kanbanStore';
 export { useTimeStore } from './timeStore';
-
+export { useEmployeeStore } from './employeeStore';

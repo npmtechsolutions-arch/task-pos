@@ -44,10 +44,7 @@ export function Header() {
 
   return (
     <header 
-      className={cn(
-        'fixed top-0 right-0 z-30 h-16 bg-white border-b border-gray-200 transition-all duration-300',
-        sidebarCollapsed ? 'left-16' : 'left-64'
-      )}
+      className="relative z-30 h-16 bg-white border-b border-gray-200"
     >
       <div className="flex items-center justify-between h-full px-4">
         {/* Left side - Search */}

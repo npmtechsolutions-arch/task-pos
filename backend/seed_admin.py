@@ -1,18 +1,17 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
+
 import asyncio
 import logging
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from app.db.session import AsyncSessionLocal
 from app.core.config import settings
-import uuid
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def seed_custom_admin():
-    engine = create_async_engine(settings.async_database_url, echo=False)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
     try:
         from app.services.user import UserService
         from app.schemas.user import UserCreate
@@ -20,7 +19,7 @@ async def seed_custom_admin():
         from app.schemas.project import ProjectCreate, ProjectVisibility, ProjectFilterParams
         from app.schemas.task import TaskCreate, TaskPriority
 
-        async with async_session() as db:
+        async with AsyncSessionLocal() as db:
             user_service = UserService(db)
             user_data = UserCreate(
                 email="admin", 
@@ -109,8 +108,6 @@ async def seed_custom_admin():
             
     except Exception as e:
         logger.error(f"Error seeding admin: {e}")
-    finally:
-        await engine.dispose()
 
 if __name__ == "__main__":
     asyncio.run(seed_custom_admin())

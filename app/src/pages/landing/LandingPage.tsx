@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useLandingContent } from '@/api/landing';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/uiStore';
@@ -22,15 +23,20 @@ export const LandingPage = () => {
         else setTheme('light');
     };
 
-    if (isLoading || !content) {
+    const _content: any = content || {
+        navbar: { brand_name: 'TaskFlow', cta_text: 'Get Started', cta_link: '/register' },
+        hero: { headline: 'Manage Work Effortlessly', sub_headline: 'The only project management tool you need to track tasks and deliver on time.', cta_text: 'Get Started Free', cta_link: '/register' }
+    };
+
+    if (isLoading && !content) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+            <div className="min-h-screen flex items-center justify-center bg-background text-foreground dark:bg-gray-900">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
         );
     }
 
-    const { navbar, hero, about, features, steps, pricing, testimonials, cta, contact, footer } = content;
+    const { navbar, hero, about, features, steps, pricing, testimonials, cta, contact, footer } = _content;
 
     const renderIcon = (name: string) => {
         switch (name.toLowerCase()) {
@@ -64,12 +70,12 @@ export const LandingPage = () => {
                             <a href="#about" className="hover:text-primary transition-colors">About</a>
                             <a href="#pricing" className="hover:text-primary transition-colors">Pricing</a>
                         </div>
-                        <a href="/login" className="text-sm font-medium hover:text-primary transition-colors">Log In</a>
+                        <Link to="/login" className="text-sm font-medium hover:text-primary transition-colors">Log In</Link>
                         <Button variant="ghost" size="icon" onClick={toggleTheme} className="rounded-full">
                             {theme === 'light' ? <Sun className="h-5 w-5" /> : theme === 'dark' ? <Moon className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
                         </Button>
                         <Button asChild className="hidden sm:inline-flex rounded-full">
-                            <a href={navbar?.cta_link || '/register'}>{navbar?.cta_text || 'Get Started'}</a>
+                            <Link to={navbar?.cta_link || '/register'}>{navbar?.cta_text || 'Get Started'}</Link>
                         </Button>
                     </div>
                 </div>
@@ -89,11 +95,11 @@ export const LandingPage = () => {
                             </p>
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                                 <Button size="lg" className="h-14 px-8 text-base shadow-lg hover:shadow-primary/25 hover:-translate-y-1 transition-all rounded-full" asChild>
-                                    <a href={hero?.cta_link || '/register'}>{hero?.cta_text || 'Get Started'} <ChevronRight className="ml-2 w-4 h-4" /></a>
+                                    <Link to={hero?.cta_link || '/register'}>{hero?.cta_text || 'Get Started Free'} <ChevronRight className="ml-2 w-4 h-4" /></Link>
                                 </Button>
                                 {hero?.secondary_cta_text && (
                                     <Button size="lg" variant="outline" className="h-14 px-8 text-base rounded-full" asChild>
-                                        <a href={hero?.secondary_cta_link}>{hero?.secondary_cta_text}</a>
+                                        <Link to={hero?.secondary_cta_link || '/login'}>{hero?.secondary_cta_text}</Link>
                                     </Button>
                                 )}
                             </div>

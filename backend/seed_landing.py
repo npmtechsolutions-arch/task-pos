@@ -1,5 +1,9 @@
 """Seed script for default dynamic landing page content."""
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parent))
+
 import asyncio
 import json
 import logging

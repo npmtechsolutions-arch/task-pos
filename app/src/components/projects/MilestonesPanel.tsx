@@ -169,7 +169,7 @@ export function MilestonesPanel({ projectId }: MilestonesPanelProps) {
     critical: milestones.filter(m => m.risk_indicator === 'critical'),
     high:     milestones.filter(m => m.risk_indicator === 'high'),
     medium:   milestones.filter(m => m.risk_indicator === 'medium'),
-    low:      milestones.filter(m => m.risk_indicator === 'low'),
+    low:      milestones.filter(m => !m.risk_indicator || m.risk_indicator === 'low'),
   };
 
   if (loading) {

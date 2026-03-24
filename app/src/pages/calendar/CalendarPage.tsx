@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Loader2, CheckSquare, Target, AlertTriangle, Plus, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { useProjectStore } from '@/stores';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 const authHeader = () => {
@@ -131,6 +132,84 @@ function NewEventModal({ onClose, onCreated, defaultDate }: {
   );
 }
 
+// ── New Milestone Modal ─────────────────────────────────────────────────────────
+function NewMilestoneModal({ onClose, onCreated, defaultDate }: {
+  onClose: () => void;
+  onCreated: () => void;
+  defaultDate?: string;
+}) {
+  const { projects, fetchProjects } = useProjectStore();
+  const [form, setForm] = useState({ name: '', project_id: '', due_date: defaultDate || '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => { if (projects.length === 0) fetchProjects(); }, []);
+
+  const handleSubmit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    if (!form.name || !form.due_date || !form.project_id) { setError('Name, project and date required'); return; }
+    setSaving(true); setError('');
+    try {
+      await axios.post(`${API_URL}/milestones`, {
+        name: form.name,
+        project_id: form.project_id,
+        milestone_type: 'date_based',
+        due_date: new Date(form.due_date + 'T00:00:00').toISOString(),
+      }, { headers: authHeader() });
+      onCreated(); // Reload calendar events entirely since ID format maps differently
+      onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail ?? e.message ?? 'Failed to create milestone');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <Target className="w-5 h-5 text-emerald-500" /> New Milestone
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{error}</div>}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
+            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={form.project_id} onChange={(e) => setForm(f => ({ ...f, project_id: e.target.value }))} required>
+              <option value="">Select a project</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+            <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Milestone name" required />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Due Date *</label>
+            <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              value={form.due_date} onChange={(e) => setForm(f => ({ ...f, due_date: e.target.value }))} required />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={saving || projects.length === 0}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg py-2 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create Milestone
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Calendar Page ─────────────────────────────────────────────────────────
 export function CalendarPage() {
   const today = new Date();
@@ -141,6 +220,7 @@ export function CalendarPage() {
   const [filter, setFilter] = useState<'all' | EventType>('all');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showNewEvent, setShowNewEvent] = useState(false);
+  const [showNewMilestone, setShowNewMilestone] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadEvents = async () => {
@@ -196,6 +276,13 @@ export function CalendarPage() {
             onCreated={e => { setEvents(prev => [...prev, e]); }}
           />
         )}
+        {showNewMilestone && (
+          <NewMilestoneModal
+            defaultDate={selectedDate ?? ''}
+            onClose={() => setShowNewMilestone(false)}
+            onCreated={() => { loadEvents(); }} // Reload all to get milestone
+          />
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
@@ -215,9 +302,13 @@ export function CalendarPage() {
                 {f === 'all' ? 'All' : f}
               </button>
             ))}
+            <button onClick={() => setShowNewMilestone(true)}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-full text-xs font-semibold transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Milestone
+            </button>
             <button onClick={() => setShowNewEvent(true)}
               className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-full text-xs font-semibold transition-colors">
-              <Plus className="w-3.5 h-3.5" /> New Event
+              <Plus className="w-3.5 h-3.5" /> Event
             </button>
           </div>
         </div>

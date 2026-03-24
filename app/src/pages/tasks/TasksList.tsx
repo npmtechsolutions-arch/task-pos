@@ -49,7 +49,7 @@ export function TasksList() {
   const { filters, setFilters, getFilteredTasks, fetchTasks, isLoading } = useTaskStore();
   const { projects, fetchProjects } = useProjectStore();
   const { user } = useAuthStore();
-  const [viewMode, setViewMode] = useState<'board' | 'list' | 'calendar'>('board');
+  const [viewMode, setViewMode] = useState<'board' | 'list' | 'calendar'>('list');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   // The project whose board is shown in board view
@@ -59,7 +59,7 @@ export function TasksList() {
   useEffect(() => {
     if (user?.id) {
       // Always fetch tasks assigned to the current user by default
-      fetchTasks({ primary_assignee_id: user.id });
+      fetchTasks({ primaryAssigneeId: user.id });
     }
     if (projects.length === 0) fetchProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,7 +119,7 @@ export function TasksList() {
             <TaskForm onSuccess={() => {
               setIsDialogOpen(false);
               // Re-fetch MY tasks so the new one shows up
-              if (user?.id) fetchTasks({ primary_assignee_id: user.id });
+              if (user?.id) fetchTasks({ primaryAssigneeId: user.id });
             }} />
           </DialogContent>
         </Dialog>

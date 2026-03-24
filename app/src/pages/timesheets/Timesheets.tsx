@@ -2,29 +2,42 @@ import { TimesheetGrid } from '@/components/timesheets/TimesheetGrid';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Briefcase, Clock, CheckCircle2, TrendingUp } from 'lucide-react';
+import { useTimeStore } from '@/stores';
 
 export default function TimesheetsPage() {
+  const { timesheets } = useTimeStore();
+  const currentSheet = timesheets[0]; // Usually the current week
+
+  // Dynamic logged today calculation
+  const todayStr = new Date().toDateString();
+  const loggedToday = currentSheet?.entries?.filter(
+    (e: any) => new Date(e.date).toDateString() === todayStr
+  ).reduce((sum: number, e: any) => sum + e.hours, 0) || 0;
+
+  const WeeklyStatus = currentSheet?.totalHours >= 40 ? 'Completed' : 'On Track';
+  const statusColor = currentSheet?.totalHours >= 40 ? 'green' : 'blue';
+
   return (
     <div className="container mx-auto p-6 max-w-7xl animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Timesheets</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Timesheets</h1>
           <p className="text-gray-500 mt-1">Manage your work logs, track billable hours, and submit for approval.</p>
         </div>
         
-        <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border shadow-sm">
+        <div className="flex items-center gap-3 bg-white dark:bg-gray-800 p-1.5 rounded-xl border border-gray-100 shadow-sm">
           <div className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 flex items-center gap-2">
             <Clock className="h-4 w-4 text-blue-600" />
             <div className="flex flex-col">
               <span className="text-[10px] uppercase font-bold text-blue-600/60 leading-none">Logged Today</span>
-              <span className="text-sm font-bold text-blue-700 leading-tight">6.5h</span>
+              <span className="text-sm font-bold text-blue-700 leading-tight">{loggedToday.toFixed(1)}h</span>
             </div>
           </div>
-          <div className="px-3 py-1.5 rounded-lg bg-green-50 border border-green-100 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <div className={`px-3 py-1.5 rounded-lg bg-${statusColor}-50 border border-${statusColor}-100 flex items-center gap-2`}>
+            <CheckCircle2 className={`h-4 w-4 text-${statusColor}-600`} />
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-bold text-green-600/60 leading-none">Weekly Status</span>
-              <span className="text-sm font-bold text-green-700 leading-tight">On Track</span>
+              <span className={`text-[10px] uppercase font-bold text-${statusColor}-600/60 leading-none`}>Weekly Status</span>
+              <span className={`text-sm font-bold text-${statusColor}-700 leading-tight`}>{WeeklyStatus}</span>
             </div>
           </div>
         </div>

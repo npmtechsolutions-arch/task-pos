@@ -160,8 +160,8 @@ export function ProjectDetail() {
           </div>
 
           {/* Project Header */}
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4 flex-1">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4 flex-1">
               {/* Color swatch */}
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0">
                 {project.key.slice(0, 2).toUpperCase()}
@@ -188,9 +188,9 @@ export function ProjectDetail() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-4 flex-shrink-0 w-full lg:w-auto">
               {/* Quick stats */}
-              <div className="flex items-center gap-6 text-sm mr-4">
+              <div className="flex items-center gap-6 text-sm flex-1 sm:flex-none justify-around sm:justify-start">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-gray-900">{project.taskCount ?? 0}</div>
                   <div className="text-gray-400 text-xs">Tasks</div>
@@ -209,11 +209,12 @@ export function ProjectDetail() {
 
               {/* Lifecycle transition */}
               {project.status !== 'archived' && (
+                <div className="flex-shrink-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       size="sm"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1 w-full sm:w-auto"
                       disabled={isTransitioning || isArchiving}
                     >
                       {isTransitioning ? (
@@ -249,6 +250,7 @@ export function ProjectDetail() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
               )}
             </div>
           </div>
@@ -262,7 +264,7 @@ export function ProjectDetail() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 mt-4 -mb-4">
+          <div className="flex gap-1 mt-6 -mb-4 overflow-x-auto pb-1 scrollbar-hide">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
