@@ -141,6 +141,7 @@ class TaskCreate(TaskBase):
     project_id: str
     parent_id: Optional[str] = None
     primary_assignee_id: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     due_date: Optional[datetime] = None
     start_date: Optional[date] = None
     estimated_hours: Optional[float] = None
@@ -156,6 +157,7 @@ class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
     primary_assignee_id: Optional[str] = None
+    assignee_ids: Optional[List[str]] = None
     due_date: Optional[datetime] = None
     start_date: Optional[date] = None
     estimated_hours: Optional[float] = None
@@ -181,6 +183,8 @@ class TaskResponse(TaskBase):
     status: TaskStatus
     primary_assignee_id: Optional[str] = None
     primary_assignee: Optional[UserResponse] = None
+    assignee_ids: Optional[List[str]] = None
+    assignees: List[UserResponse] = []
     reporter_id: str
     reporter: UserResponse
     due_date: Optional[datetime] = None

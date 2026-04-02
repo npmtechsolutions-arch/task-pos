@@ -13,7 +13,8 @@ import {
   LogOut,
   Plus,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Kanban,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUIStore, useProjectStore } from '@/stores';
@@ -35,21 +36,20 @@ import {
 } from '@/components/ui/dialog';
 import { ProjectForm } from '@/components/projects/ProjectForm';
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Projects', href: '/projects', icon: FolderKanban },
-  { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
+const mainNavigation = [
+  { name: 'Dashboard',  href: '/dashboard',  icon: LayoutDashboard },
+  { name: 'Projects',   href: '/projects',   icon: FolderKanban },
+  { name: 'My Tasks',   href: '/tasks',      icon: CheckSquare },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
-  { name: 'Team', href: '/team', icon: Users },
-  { name: 'HR & Org', href: '/hr', icon: Users },
-  { name: 'Calendar', href: '/calendar', icon: Calendar },
-  { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'HR & Org',   href: '/hr',         icon: Users },
+  { name: 'Calendar',   href: '/calendar',   icon: Calendar },
+  { name: 'Reports',    href: '/reports',    icon: BarChart3 },
 ];
 
-const bottomNavigation = [
+const adminNavigation = [
+  { name: 'Super Admin',   href: '/admin/super',    icon: ShieldCheck },
   { name: 'Landing Admin', href: '/dashboard/admin', icon: LayoutDashboard },
-  { name: 'Super Admin', href: '/admin/super', icon: ShieldCheck },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Settings',      href: '/settings',        icon: Settings },
 ];
 
 export function Sidebar() {
@@ -72,16 +72,59 @@ export function Sidebar() {
     return location.pathname.startsWith(href);
   };
 
+  const NavLink = ({ item }: { item: { name: string; href: string; icon: React.ElementType } }) => {
+    const Icon = item.icon;
+    const active = isActive(item.href);
+
+    if (sidebarCollapsed) {
+      return (
+        <Tooltip key={item.name}>
+          <TooltipTrigger asChild>
+            <Link
+              to={item.href}
+              className={cn(
+                'flex items-center justify-center p-2 rounded-lg transition-colors',
+                active
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+              )}
+            >
+              <Icon className="w-5 h-5" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right"><p>{item.name}</p></TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return (
+      <Link
+        key={item.name}
+        to={item.href}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
+          active
+            ? 'bg-blue-600 text-white'
+            : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+        )}
+      >
+        <Icon className="w-5 h-5" />
+        <span className="text-sm font-medium">{item.name}</span>
+      </Link>
+    );
+  };
+
   return (
     <TooltipProvider delayDuration={0}>
+      {/* ── Full-height sidebar using flex column — NO absolute positioning ── */}
       <aside
         className={cn(
-          'relative flex-shrink-0 z-40 h-screen bg-gray-900 transition-all duration-300',
+          'flex flex-col flex-shrink-0 h-screen bg-gray-900 transition-all duration-300 overflow-hidden',
           sidebarCollapsed ? 'w-16' : 'w-64'
         )}
       >
-        {/* Logo */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800">
+        {/* ── Logo + collapse toggle ─────────────────────────────────────── */}
+        <div className="flex h-16 items-center justify-between px-4 border-b border-gray-800 flex-shrink-0">
           <Link to="/dashboard" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
               <FolderKanban className="w-5 h-5 text-white" />
@@ -94,7 +137,7 @@ export function Sidebar() {
             variant="ghost"
             size="icon"
             onClick={toggleSidebar}
-            className="text-gray-400 hover:text-white hover:bg-gray-800"
+            className="text-gray-400 hover:text-white hover:bg-gray-800 flex-shrink-0"
           >
             {sidebarCollapsed ? (
               <ChevronRight className="w-4 h-4" />
@@ -104,8 +147,8 @@ export function Sidebar() {
           </Button>
         </div>
 
-        {/* New Project Button */}
-        <div className="p-3">
+        {/* ── New Project button ─────────────────────────────────────────── */}
+        <div className="p-3 flex-shrink-0">
           <Dialog open={isProjectDialogOpen} onOpenChange={setIsProjectDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -130,61 +173,23 @@ export function Sidebar() {
           </Dialog>
         </div>
 
-        {/* Main Navigation */}
-        <nav className="flex-1 px-2 py-4 space-y-1">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
+        {/* ── Main navigation — scrollable middle section ────────────────── */}
+        <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+          {mainNavigation.map((item) => (
+            <NavLink key={item.name} item={item} />
+          ))}
 
-            return sidebarCollapsed ? (
-              <Tooltip key={item.name}>
-                <TooltipTrigger asChild>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      'flex items-center justify-center p-2 rounded-lg transition-colors',
-                      active
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>{item.name}</p>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
-                  active
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                )}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Recent Projects */}
-        {!sidebarCollapsed && projects.length > 0 && (
-          <div className="px-4 py-2">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-              Recent Projects
-            </p>
-            <div className="space-y-1">
-              {projects.slice(0, 3).map((project) => (
+          {/* Recent Projects */}
+          {!sidebarCollapsed && projects.length > 0 && (
+            <div className="pt-4">
+              <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+                Recent Projects
+              </p>
+              {projects.slice(0, 4).map((project) => (
                 <Link
                   key={project.id}
                   to={`/projects/${project.id}`}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
                 >
                   <div
                     className="w-2 h-2 rounded-full flex-shrink-0"
@@ -194,86 +199,61 @@ export function Sidebar() {
                 </Link>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </nav>
 
-        {/* Bottom Section */}
-        <div className="absolute bottom-0 left-0 right-0 p-2 border-t border-gray-800">
-          {/* Settings */}
-          {bottomNavigation.map((item) => {
-            const Icon = item.icon;
-            return sidebarCollapsed ? (
-              <Tooltip key={item.name}>
-                <TooltipTrigger asChild>
-                  <Link
-                    to={item.href}
-                    className="flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-                  >
-                    <Icon className="w-5 h-5" />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>{item.name}</p>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Link
-                key={item.name}
-                to={item.href}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-sm font-medium">{item.name}</span>
-              </Link>
-            );
-          })}
+        {/* ── Admin / Settings navigation — fixed at bottom ─────────────── */}
+        <div className="px-2 py-2 border-t border-gray-800 space-y-0.5 flex-shrink-0">
+          {adminNavigation.map((item) => (
+            <NavLink key={item.name} item={item} />
+          ))}
+        </div>
 
-          {/* User Profile */}
-          <div className="mt-2 pt-2 border-t border-gray-800">
-            {sidebarCollapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                   onClick={handleLogout}
-                    className="flex items-center justify-center w-full p-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-                  >
-                    <Avatar className="w-8 h-8">
-                      <AvatarImage src={user?.avatarUrl} />
-                      <AvatarFallback className="bg-blue-600 text-white text-xs">
-                        {user?.firstName?.[0]}{user?.lastName?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  <p>{user?.fullName || user?.email}</p>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <div className="flex items-center gap-3 px-3 py-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarImage src={user?.avatarUrl} />
-                  <AvatarFallback className="bg-blue-600 text-white text-xs">
-                    {user?.firstName?.[0]}{user?.lastName?.[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {user?.firstName} {user?.lastName}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
+        {/* ── User profile + logout ──────────────────────────────────────── */}
+        <div className="px-2 py-2 border-t border-gray-800 flex-shrink-0">
+          {sidebarCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
                   onClick={handleLogout}
-                  className="text-gray-400 hover:text-white hover:bg-gray-800"
+                  className="flex items-center justify-center w-full p-2 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
                 >
-                  <LogOut className="w-4 h-4" />
-                </Button>
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={user?.avatarUrl} />
+                    <AvatarFallback className="bg-blue-600 text-white text-xs">
+                      {user?.firstName?.[0]}{user?.lastName?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{user?.fullName || user?.email}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <div className="flex items-center gap-3 px-3 py-2">
+              <Avatar className="w-8 h-8 flex-shrink-0">
+                <AvatarImage src={user?.avatarUrl} />
+                <AvatarFallback className="bg-blue-600 text-white text-xs">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {user?.firstName} {user?.lastName}
+                </p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
               </div>
-            )}
-          </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-white hover:bg-gray-800 flex-shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </aside>
     </TooltipProvider>

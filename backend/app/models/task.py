@@ -289,6 +289,16 @@ class Task(Base):
     )
 
     @property
+    def assignee_ids(self) -> List[str]:
+        """List of active assignee IDs."""
+        return [a.user_id for a in self.assignments]
+
+    @property
+    def assignees(self) -> List["User"]:
+        """List of assigned User objects."""
+        return [a.user for a in self.assignments]
+
+    @property
     def is_overdue(self) -> bool:
         """Check if task is overdue."""
         if self.due_date and self.status != TaskStatus.DONE:

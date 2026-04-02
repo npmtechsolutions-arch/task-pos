@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.models.hr_hierarchy import Department, HRAssignment, HRRole
+from app.models.hr_hierarchy import Department, HRAssignment, HRRole, Role
 from app.models.user import User, UserRole
 
 router = APIRouter()
@@ -36,6 +36,19 @@ class MemberAdd(BaseModel):
     user_id: str
     hr_role: HRRole
     reports_to_id: Optional[str] = None
+
+
+class RoleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class RoleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
 
 
 class MemberResponse(BaseModel):
@@ -344,3 +357,33 @@ async def hr_stats(
         "total_members": member_count.scalar() or 0,
         "by_role": role_dist,
     }
+
+
+# ── Roles ───────────────────────────────────────────────────────────────────
+@router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+async def create_role(
+    data: RoleCreate,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not _can_see_all(current_user):
+        raise HTTPException(403, "Only admins can manage roles")
+    
+    role = Role(
+        id=str(uuid.uuid4()),
+        name=data.name,
+        description=data.description
+    )
+    db.add(role)
+    await db.commit()
+    await db.refresh(role)
+    return RoleResponse.model_validate(role)
+
+@router.get("/roles", response_model=List[RoleResponse])
+async def list_roles(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Role).order_by(Role.name))
+    return [RoleResponse.model_validate(r) for r in result.scalars().all()]
+

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, ShieldCheck, Loader2, X, RefreshCw, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Plus, ShieldCheck, Loader2, X, RefreshCw, Eye, EyeOff, Trash2, Key } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
@@ -28,6 +28,14 @@ interface AdminUser {
   created_at: string;
   title?: string;
   department?: string;
+}
+
+interface CustomRole {
+  id: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  created_at: string;
 }
 
 // ── Create User Modal ─────────────────────────────────────────────────────────
@@ -131,6 +139,55 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
+// ── Create Role Modal ─────────────────────────────────────────────────────────
+function CreateRoleModal({ onClose, onCreated }: { onClose: () => void; onCreated: (r: CustomRole) => void }) {
+  const [form, setForm] = useState({ name: '', description: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setError('Name is required'); return; }
+    setSaving(true); setError('');
+    try {
+      const res = await axios.post(`${API_URL}/rbac/roles`, form, { headers: authHeader() });
+      onCreated(res.data); onClose();
+    } catch (e: any) {
+      setError(e.response?.data?.detail ?? e.message ?? 'Create failed');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <Key className="w-5 h-5 text-indigo-500" /> Create Custom Role
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5"/></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Role Name *</label>
+            <input className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="e.g. Guest Writer" autoFocus required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="What does this role do?" rows={2} />
+          </div>
+          <div className="flex gap-3 pt-2">
+             <button type="button" onClick={onClose} className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 py-2 rounded-lg text-sm font-medium">Cancel</button>
+             <button type="submit" disabled={saving} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center text-sm font-semibold disabled:opacity-60 gap-2">
+               {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Create'}
+             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Reset Password Modal ───────────────────────────────────────────────────────
 function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
   const [password, setPassword] = useState('');
@@ -202,18 +259,23 @@ export function SuperAdminPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [showCreateRole, setShowCreateRole] = useState(false);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [deactivating, setDeactivating] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [usersRes, statsRes] = await Promise.all([
+      const [usersRes, statsRes, rolesRes] = await Promise.all([
         axios.get(`${API_URL}/admin/users?per_page=100`, { headers: authHeader() }),
         axios.get(`${API_URL}/admin/stats`, { headers: authHeader() }),
+        axios.get(`${API_URL}/rbac/roles`, { headers: authHeader() }).catch(() => ({ data: { items: [] } })),
       ]);
       setUsers(usersRes.data);
       setStats(statsRes.data);
+      setCustomRoles(rolesRes.data.items || []);
     } catch (e) {
       console.error('Admin fetch failed:', e);
     } finally { setLoading(false); }
@@ -259,9 +321,31 @@ export function SuperAdminPage() {
             </h1>
             <p className="text-gray-500 text-sm mt-1">User management, roles, and access control</p>
           </div>
-          <button onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
-            <Plus className="w-4 h-4" /> Create User
+          <div className="flex gap-3">
+            <button onClick={() => setShowCreateRole(true)}
+              className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+              <Plus className="w-4 h-4 text-gray-500" /> Custom Role
+            </button>
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+              <Plus className="w-4 h-4" /> Create User
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-6 border-b border-gray-200 mb-6">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'users' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            Users
+          </button>
+          <button
+            onClick={() => setActiveTab('roles')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'roles' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            Custom Roles
           </button>
         </div>
 
@@ -282,92 +366,139 @@ export function SuperAdminPage() {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4 flex gap-3 flex-wrap">
-          <input className="flex-1 min-w-[200px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} />
-          <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-            <option value="">All Roles</option>
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <button onClick={fetchData} className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </button>
-        </div>
-
-        {/* Users Table */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-12 text-center text-gray-400">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-indigo-400" />
-              <p>Loading users…</p>
+        {activeTab === 'users' ? (
+          <>
+            {/* Filters */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4 flex gap-3 flex-wrap">
+              <input className="flex-1 min-w-[200px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                placeholder="Search by name or email…" value={search} onChange={e => setSearch(e.target.value)} />
+              <select className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+                <option value="">All Roles</option>
+                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <button onClick={fetchData} className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+                <RefreshCw className="w-4 h-4" /> Refresh
+              </button>
             </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Department</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Joined</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-12 text-gray-400">No users found</td></tr>
-                )}
-                {filtered.map(user => (
-                  <tr key={user.id} className="border-b border-gray-50 hover:bg-indigo-50/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                          {(user.first_name?.[0] ?? user.email[0]).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-800">{user.first_name} {user.last_name}</p>
-                          <p className="text-xs text-gray-400">{user.email}</p>
-                          {user.title && <p className="text-xs text-indigo-400">{user.title}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{user.department ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${user.is_active ? 'text-green-600' : 'text-red-400'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-400'}`} />
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">
-                      {new Date(user.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button onClick={() => setResetTarget(user)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Reset Password">
-                          <RefreshCw className="w-4 h-4" />
-                        </button>
-                        {user.is_active && (
-                          <button onClick={() => deactivate(user)} disabled={deactivating === user.id}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Deactivate">
-                            {deactivating === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          </button>
-                        )}
-                      </div>
-                    </td>
+
+            {/* Users Table */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              {loading ? (
+                <div className="p-12 text-center text-gray-400">
+                  <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-indigo-400" />
+                  <p>Loading users…</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">User</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Department</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Joined</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={6} className="text-center py-12 text-gray-400">No users found</td></tr>
+                    )}
+                    {filtered.map(user => (
+                      <tr key={user.id} className="border-b border-gray-50 hover:bg-indigo-50/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                              {(user.first_name?.[0] ?? user.email[0]).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-800">{user.first_name} {user.last_name}</p>
+                              <p className="text-xs text-gray-400">{user.email}</p>
+                              {user.title && <p className="text-xs text-indigo-400">{user.title}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{user.department ?? '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${user.is_active ? 'text-green-600' : 'text-red-400'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-red-400'}`} />
+                            {user.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-400">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 justify-end">
+                            <button onClick={() => setResetTarget(user)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Reset Password">
+                              <RefreshCw className="w-4 h-4" />
+                            </button>
+                            {user.is_active && (
+                              <button onClick={() => deactivate(user)} disabled={deactivating === user.id}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Deactivate">
+                                {deactivating === user.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            {loading ? (
+              <div className="p-12 text-center text-gray-400">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-indigo-400" />
+                <p>Loading roles…</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {customRoles.length === 0 && (
+                    <tr><td colSpan={3} className="text-center py-12 text-gray-400">No custom roles found</td></tr>
+                  )}
+                  {customRoles.map(role => (
+                    <tr key={role.id} className="border-b border-gray-50 hover:bg-indigo-50/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-gray-800">{role.name}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{role.description || '—'}</td>
+                      <td className="px-4 py-3">
+                        {role.is_system ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">System</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700">Custom</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
+      {showCreateRole && (
+        <CreateRoleModal
+          onClose={() => setShowCreateRole(false)}
+          onCreated={r => setCustomRoles(prev => [r, ...prev])}
+        />
+      )}
     </div>
   );
 }

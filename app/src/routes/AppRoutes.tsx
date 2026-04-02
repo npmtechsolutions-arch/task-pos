@@ -6,6 +6,7 @@ import { Register } from '@/pages/auth/Register';
 import { Dashboard } from '@/pages/dashboard/Dashboard';
 import { ProjectsList } from '@/pages/projects/ProjectsList';
 import { ProjectDetail } from '@/pages/projects/ProjectDetail';
+import { ProjectDetailsPage } from '@/pages/projects/ProjectDetailsPage';
 import { TasksList } from '@/pages/tasks/TasksList';
 import { LandingPage } from '@/pages/landing/LandingPage';
 import { AdminDashboard } from '@/pages/admin/AdminDashboard';
@@ -28,6 +29,8 @@ import { CalendarPage } from '@/pages/calendar/CalendarPage';
 import { SuperAdminPage } from '@/pages/admin/SuperAdminPage';
 // HR
 import { HRPage } from '@/pages/hr/HRPage';
+// Kanban (standalone board)
+import { KanbanPage } from '@/pages/kanban/KanbanPage';
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -101,6 +104,19 @@ export function AppRoutes() {
       >
         <Route index element={<ProjectsList />} />
         <Route path=":projectId" element={<ProjectDetail />} />
+        <Route path=":projectId/details" element={<ProjectDetailsPage />} />
+      </Route>
+
+      {/* Standalone Kanban Board */}
+      <Route
+        path="/kanban"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path=":projectId" element={<KanbanPage />} />
       </Route>
 
       {/* Tasks */}

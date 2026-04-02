@@ -209,6 +209,34 @@ async def add_project_member(
 
     try:
         member = await project_service.add_member(project_id, member_data)
+
+        # 🔔 Notify the new member that they were added to this project
+        try:
+            from app.services.notification import NotificationService
+            from app.websocket.manager import manager
+            project = await project_service.get_by_id(project_id)
+            notif_service = NotificationService(db)
+            notif = await notif_service.notify_project_invitation(
+                user_id=member_data.user_id,
+                project_id=project_id,
+                project_name=project.name if project else project_id,
+                inviter_name=f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or current_user.email,
+            )
+            await manager.send_to_user(member_data.user_id, {
+                "type": "notification",
+                "data": {
+                    "id": notif.id,
+                    "notification_type": notif.notification_type.value if hasattr(notif.notification_type, 'value') else str(notif.notification_type),
+                    "title": notif.title,
+                    "message": notif.message,
+                    "action_url": notif.action_url,
+                    "is_read": False,
+                    "created_at": notif.created_at.isoformat(),
+                }
+            })
+        except Exception:
+            pass  # Notifications must never break the main request
+
         return ProjectMemberResponse.model_validate(member)
     except ValueError as e:
         raise HTTPException(

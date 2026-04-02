@@ -84,9 +84,9 @@ function AddMemberModal({ dept, onClose, onAdded, actorRole }: {
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800">Add Member to {dept.name}</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-white">Add Member to {dept.name}</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-6 space-y-4">
@@ -155,9 +155,9 @@ function CreateDeptModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800">New Department</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-white">New Department</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleCreate} className="p-6 space-y-4">
@@ -217,7 +217,7 @@ function DeptCard({ dept, currentUserRole }: { dept: Department; currentUserRole
   for (const m of members) { if (grouped[m.hr_role]) grouped[m.hr_role].push(m); }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
       {showAddModal && (
         <AddMemberModal dept={dept} actorRole={currentUserRole}
           onClose={() => setShowAddModal(false)}
@@ -227,7 +227,7 @@ function DeptCard({ dept, currentUserRole }: { dept: Department; currentUserRole
         className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 transition-colors">
         <Building2 className="w-5 h-5 text-indigo-500 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-gray-800">{dept.name}</h3>
+          <h3 className="font-bold text-gray-800 dark:text-white">{dept.name}</h3>
           {dept.description && <p className="text-xs text-gray-500 truncate">{dept.description}</p>}
         </div>
         <div className="flex items-center gap-3">
@@ -319,7 +319,7 @@ export function HRPage() {
   useEffect(() => { loadData(); }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       {showCreate && (
         <CreateDeptModal
           onClose={() => setShowCreate(false)}
@@ -329,7 +329,7 @@ export function HRPage() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Users className="w-7 h-7 text-indigo-600" /> HR & Organisation
             </h1>
             <p className="text-gray-500 text-sm mt-1">Department hierarchy and personnel</p>
@@ -356,7 +356,7 @@ export function HRPage() {
               { label: 'Managers', value: stats.by_role?.manager ?? 0, color: 'text-purple-600' },
               { label: 'Team Leaders', value: stats.by_role?.team_leader ?? 0, color: 'text-emerald-600' },
             ].map(s => (
-              <div key={s.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
                 <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-gray-500 mt-1">{s.label}</div>
               </div>

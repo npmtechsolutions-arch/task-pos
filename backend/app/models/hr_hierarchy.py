@@ -40,6 +40,19 @@ class Department(Base):
     )
 
 
+class Role(Base):
+    """Custom roles for the organization."""
+
+    __tablename__ = "roles"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class HRAssignment(Base):
     """Maps a user to a department with a specific HR role and optional reporting line."""
 

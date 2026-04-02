@@ -4,9 +4,10 @@ import {
   ArrowLeft, Clock, User, Calendar, Flag, MessageSquare,
   Timer, GitBranch, Trash2, Plus, CheckCircle2, Circle,
   AlertCircle, Loader2, ChevronRight,
-  Tag, Hash
+  Tag, Hash, Users
 } from 'lucide-react';
-import { useTaskStore, useUIStore, useAuthStore } from '@/stores';
+import MDEditor from '@uiw/react-md-editor';
+import { useTaskStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -43,8 +44,6 @@ export function TaskDetail() {
     fetchTaskDetail,
     updateTaskApi,
     deleteTaskApi,
-    addCommentApi,
-    deleteCommentApi,
     logTimeApi,
     addSubtask,
     deleteSubtask,
@@ -181,13 +180,13 @@ export function TaskDetail() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-gray-900 transition-colors">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4 sticky top-0 z-10 transition-colors">
         <div className="max-w-5xl mx-auto">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 text-sm text-gray-400 mb-3">
-            <Link to="/tasks" className="hover:text-gray-600 flex items-center gap-1">
+            <Link to="/tasks" className="hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-1 transition-colors">
               <ArrowLeft className="w-3.5 h-3.5" /> Tasks
             </Link>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -197,7 +196,7 @@ export function TaskDetail() {
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               {/* Title */}
-              <h1 className="text-xl font-bold text-gray-900 leading-snug">{task.title}</h1>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-snug">{task.title}</h1>
 
               {/* Meta badges */}
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -236,6 +235,15 @@ export function TaskDetail() {
 
               <Button
                 size="sm"
+                variant="outline"
+                className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 text-xs font-semibold"
+                onClick={() => navigate(`/kanban/${task.projectId}`)}
+              >
+                View Kanban
+              </Button>
+
+              <Button
+                size="sm"
                 variant="ghost"
                 className="text-red-500 hover:bg-red-50 hover:text-red-600"
                 onClick={handleDeleteTask}
@@ -249,11 +257,11 @@ export function TaskDetail() {
           {/* Progress bar for subtasks */}
           {subtasks.length > 0 && (
             <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
                 <span>Subtasks</span>
                 <span>{completedSubtasks}/{subtasks.length}</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
                   style={{ width: `${subtasks.length ? Math.round(completedSubtasks / subtasks.length * 100) : 0}%` }}
@@ -271,13 +279,13 @@ export function TaskDetail() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors',
                   activeTab === tab.id
-                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/60'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/60 dark:bg-indigo-900/40 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
                 )}
               >
                 {tab.icon} {tab.label}
                 {tab.count != null && tab.count > 0 && (
-                  <span className={cn('text-[10px] px-1.5 rounded-full', activeTab === tab.id ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500')}>
+                  <span className={cn('text-[10px] px-1.5 rounded-full', activeTab === tab.id ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400')}>
                     {tab.count}
                   </span>
                 )}
@@ -326,18 +334,25 @@ export function TaskDetail() {
 function DetailsTab({ task }: { task: any }) {
   const fields = [
     {
-      label: 'Assignee',
-      icon: <User className="w-4 h-4 text-indigo-400" />,
-      value: task.primaryAssignee
+      label: 'Assignees',
+      icon: <Users className="w-4 h-4 text-indigo-400" />,
+      value: (task.assignees?.length > 0)
         ? (
-          <div className="flex items-center gap-2">
-            <Avatar className="w-6 h-6">
-              <AvatarImage src={task.primaryAssignee.avatarUrl} />
-              <AvatarFallback className="text-[10px]">
-                {(task.primaryAssignee.firstName?.[0] ?? '')}{(task.primaryAssignee.lastName?.[0] ?? '')}
-              </AvatarFallback>
-            </Avatar>
-            <span>{task.primaryAssignee.firstName} {task.primaryAssignee.lastName}</span>
+          <div className="flex flex-wrap gap-2">
+            {task.assignees.map((assignee: any) => (
+              <div key={assignee.id} className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-700/50 px-2 py-1 rounded-md text-xs border border-gray-100 dark:border-gray-600">
+                <Avatar className="w-5 h-5">
+                  <AvatarImage src={assignee.avatarUrl} />
+                  <AvatarFallback className="text-[9px]">
+                    {(assignee.firstName?.[0] ?? '')}{(assignee.lastName?.[0] ?? '')}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{assignee.firstName} {assignee.lastName}</span>
+                {assignee.id === task.primaryAssigneeId && (
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 ml-1 bg-indigo-50 text-indigo-600 border-indigo-200">Primary</Badge>
+                )}
+              </div>
+            ))}
           </div>
         )
         : <span className="text-gray-400 italic">Unassigned</span>,
@@ -380,24 +395,31 @@ function DetailsTab({ task }: { task: any }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Description */}
-      <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h3 className="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">Description</h3>
+      <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6 transition-colors">
+        <h3 className="font-semibold text-gray-700 dark:text-gray-200 mb-3 text-sm uppercase tracking-wide">Description</h3>
         {task.description ? (
-          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-sm">{task.description}</p>
+          <div data-color-mode="light" className="dark:hidden">
+            <MDEditor.Markdown source={task.description} className="text-sm leading-relaxed" />
+          </div>
         ) : (
           <p className="text-gray-400 italic text-sm">No description provided.</p>
+        )}
+        {task.description && (
+          <div data-color-mode="dark" className="hidden dark:block text-gray-300">
+            <MDEditor.Markdown source={task.description} className="text-sm leading-relaxed" style={{ backgroundColor: 'transparent' }} />
+          </div>
         )}
       </div>
 
       {/* Meta fields */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-        <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide mb-4">Details</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6 space-y-4 transition-colors">
+        <h3 className="font-semibold text-gray-700 dark:text-gray-200 text-sm uppercase tracking-wide mb-4">Details</h3>
         {fields.map((f) => (
-          <div key={f.label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
+          <div key={f.label} className="flex items-center justify-between py-2 border-b border-gray-50 dark:border-gray-700/50 last:border-0">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
               {f.icon} {f.label}
             </div>
-            <div className="text-sm text-gray-800 font-medium">{f.value}</div>
+            <div className="text-sm text-gray-800 dark:text-gray-200 font-medium">{f.value}</div>
           </div>
         ))}
 
@@ -425,9 +447,9 @@ function DetailsTab({ task }: { task: any }) {
 
 function SubtasksTab({ subtasks, newSubtaskTitle, setNewSubtaskTitle, isAddingSubtask, onAdd, onToggle, onDelete, inputRef }: any) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6 transition-colors">
       <div className="flex items-center justify-between mb-5">
-        <h3 className="font-semibold text-gray-800">Subtasks ({subtasks.length})</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-gray-200">Subtasks ({subtasks.length})</h3>
       </div>
 
       {/* Add subtask */}
@@ -447,11 +469,11 @@ function SubtasksTab({ subtasks, newSubtaskTitle, setNewSubtaskTitle, isAddingSu
 
       {/* Subtask list */}
       {subtasks.length === 0 ? (
-        <p className="text-gray-400 text-sm italic text-center py-8">No subtasks yet. Add one above.</p>
+        <p className="text-gray-400 dark:text-gray-500 text-sm italic text-center py-8">No subtasks yet. Add one above.</p>
       ) : (
         <div className="space-y-2">
           {subtasks.map((subtask: any) => (
-            <div key={subtask.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 group">
+            <div key={subtask.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 group transition-colors">
               <button
                 onClick={() => onToggle(subtask.id, subtask.status)}
                 className="flex-shrink-0"
@@ -495,11 +517,11 @@ function TimeLogTab({ task, logHours, setLogHours, logDesc, setLogDesc, isLoggin
       {/* Summary card */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Estimated', value: `${estimatedHours}h`, color: 'text-blue-600' },
-          { label: 'Logged', value: `${actualHours}h`, color: 'text-green-600' },
-          { label: 'Remaining', value: `${Math.max(0, estimatedHours - actualHours)}h`, color: estimatedHours > 0 && actualHours > estimatedHours ? 'text-red-600' : 'text-gray-700' },
+          { label: 'Estimated', value: `${estimatedHours}h`, color: 'text-blue-600 dark:text-blue-400' },
+          { label: 'Logged', value: `${actualHours}h`, color: 'text-green-600 dark:text-green-400' },
+          { label: 'Remaining', value: `${Math.max(0, estimatedHours - actualHours)}h`, color: estimatedHours > 0 && actualHours > estimatedHours ? 'text-red-600' : 'text-gray-700 dark:text-gray-300' },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 text-center">
+          <div key={s.label} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 text-center transition-colors">
             <div className={cn('text-3xl font-bold', s.color)}>{s.value}</div>
             <div className="text-gray-400 text-xs mt-1">{s.label}</div>
           </div>
@@ -525,8 +547,8 @@ function TimeLogTab({ task, logHours, setLogHours, logDesc, setLogDesc, isLoggin
       )}
 
       {/* Log Time form */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h4 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-6 transition-colors">
+        <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
           <Timer className="w-4 h-4 text-indigo-500" /> Log Time
         </h4>
         <div className="flex gap-3">

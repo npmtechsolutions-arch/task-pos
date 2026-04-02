@@ -165,6 +165,28 @@ class TaskService:
         self.db.add(task)
         await self.db.flush()
 
+        # Add assignees
+        if task_data.assignee_ids:
+            from app.models.task import TaskAssignment
+            for uid in task_data.assignee_ids:
+                is_primary = (uid == task_data.primary_assignee_id)
+                assignment = TaskAssignment(
+                    task_id=task.id,
+                    user_id=uid,
+                    assigned_by=reporter_id,
+                    is_primary=is_primary
+                )
+                self.db.add(assignment)
+        elif task_data.primary_assignee_id:
+            # Fallback if only primary_assignee_id is provided
+            from app.models.task import TaskAssignment
+            self.db.add(TaskAssignment(
+                task_id=task.id,
+                user_id=task_data.primary_assignee_id,
+                assigned_by=reporter_id,
+                is_primary=True
+            ))
+
         # Add tags if specified
         if task_data.tag_ids:
             tags_result = await self.db.execute(
@@ -184,6 +206,39 @@ class TaskService:
             await dashboard_service.broadcast_dashboard_update(task.primary_assignee_id)
         if reporter_id != task.primary_assignee_id:
             await dashboard_service.broadcast_dashboard_update(reporter_id)
+
+        # 🔔 Send real-time notification to assignee
+        if task.primary_assignee_id and task.primary_assignee_id != reporter_id:
+            try:
+                from app.services.notification import NotificationService
+                from app.schemas.notification import NotificationCreate
+                from app.models.notification import NotificationType
+                from app.websocket.manager import manager
+
+                notif_service = NotificationService(self.db)
+                notif = await notif_service.notify_task_assigned(
+                    user_id=task.primary_assignee_id,
+                    task_id=task.id,
+                    task_title=task.title,
+                    project_id=task.project_id,
+                    project_name="",
+                    assigned_by_name=reporter_id,
+                )
+                # Push over WebSocket immediately
+                await manager.send_to_user(task.primary_assignee_id, {
+                    "type": "notification",
+                    "data": {
+                        "id": notif.id,
+                        "notification_type": notif.notification_type.value if hasattr(notif.notification_type, 'value') else str(notif.notification_type),
+                        "title": notif.title,
+                        "message": notif.message,
+                        "action_url": notif.action_url,
+                        "is_read": False,
+                        "created_at": notif.created_at.isoformat(),
+                    }
+                })
+            except Exception as e:
+                logger.warning("Notification dispatch failed (non-critical)", error=str(e))
 
         logger.info("Task created successfully", task_id=task.id)
         return await self.get_with_details(task.id)

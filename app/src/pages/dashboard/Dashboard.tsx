@@ -71,10 +71,10 @@ export function Dashboard() {
       {/* Welcome Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Welcome back, {user?.firstName}! 👋
           </h1>
-          <p className="text-gray-500 mt-1">
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
             Here&apos;s what&apos;s happening with your projects today.
           </p>
         </div>
@@ -135,24 +135,24 @@ export function Dashboard() {
           <TeamWidget />
 
           {/* Quick Stats */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="font-semibold text-gray-900 mb-4">Quick Stats</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Quick Stats</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
                     <TrendingUp className="w-4 h-4 text-blue-600" />
                   </div>
-                  <span className="text-sm text-gray-600">In Progress</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">In Progress</span>
                 </div>
-                <span className="font-semibold text-gray-900">{currentStats.my_tasks_in_progress}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{currentStats.my_tasks_in_progress}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
                     <AlertCircle className="w-4 h-4 text-red-600" />
                   </div>
-                  <span className="text-sm text-gray-600">Overdue</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Overdue</span>
                 </div>
                 <span className="font-semibold text-red-600">{currentStats.overdue_tasks}</span>
               </div>
@@ -161,9 +161,9 @@ export function Dashboard() {
                   <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
                     <Calendar className="w-4 h-4 text-yellow-600" />
                   </div>
-                  <span className="text-sm text-gray-600">Due this week</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Due this week</span>
                 </div>
-                <span className="font-semibold text-gray-900">{currentStats.due_this_week}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">{currentStats.due_this_week}</span>
               </div>
             </div>
           </div>

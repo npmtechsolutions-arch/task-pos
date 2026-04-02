@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { CalendarIcon, Clock, User, GitBranch, Loader2, AlertCircle } from 'lucide-react';
+import { CalendarIcon, Clock, User, GitBranch, Loader2, AlertCircle, X } from 'lucide-react';
 import { format } from 'date-fns';
+import MDEditor from '@uiw/react-md-editor';
 import { cn } from '@/lib/utils';
 import { useTaskStore, useProjectStore, useUIStore, useAuthStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -36,7 +36,7 @@ const taskSchema = z.object({
   description: z.string().optional(),
   projectId: z.string().min(1, 'Project is required'),
   priority: z.enum(['lowest', 'low', 'medium', 'high', 'highest']),
-  primaryAssigneeId: z.string().optional(),
+  assigneeIds: z.array(z.string()).optional(),
   dueDate: z.date().optional(),
   estimatedHours: z.string().optional(),
   parentId: z
@@ -93,11 +93,13 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
       priority: 'medium',
       projectId: defaultProjectId || '',
       parentId: parentId || undefined,
-      primaryAssigneeId: user?.id || undefined,
+      assigneeIds: user?.id ? [user.id] : [],
     },
   });
 
   const dueDate = watch('dueDate');
+  const assigneeIds = watch('assigneeIds') || [];
+  const description = watch('description') || '';
 
   // Ensure projects are loaded
   useEffect(() => {
@@ -162,17 +164,13 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const assigneeId =
-        data.primaryAssigneeId === 'unassigned' || !data.primaryAssigneeId
-          ? null
-          : data.primaryAssigneeId;
-
       await createTask({
         title: data.title.trim(),
         description: data.description?.trim() || undefined,
         project_id: data.projectId,
         parent_id: data.parentId?.trim() || parentId || null,
-        primary_assignee_id: assigneeId,
+        primary_assignee_id: assigneeIds.length > 0 ? assigneeIds[0] : null,
+        assignee_ids: assigneeIds,
         priority: data.priority,
         due_date: data.dueDate ? data.dueDate.toISOString() : null,
         estimated_hours: data.estimatedHours ? parseFloat(data.estimatedHours) : null,
@@ -233,13 +231,15 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
       </div>
 
       {/* Description */}
-      <div className="space-y-1.5">
+      <div className="space-y-1.5" data-color-mode="light">
         <Label htmlFor="description">Description</Label>
-        <Textarea
+        <MDEditor
           id="description"
-          placeholder="Add details, acceptance criteria, or context…"
-          rows={3}
-          {...register('description')}
+          value={description}
+          onChange={(val) => setValue('description', val || '')}
+          preview="edit"
+          height={200}
+          className="border border-gray-200 rounded-lg shadow-none"
         />
       </div>
 
@@ -307,31 +307,51 @@ export function TaskForm({ onSuccess, defaultProjectId, parentId }: TaskFormProp
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1">
-            <User className="w-3.5 h-3.5" /> Assignee
+            <User className="w-3.5 h-3.5" /> Assignees ({assigneeIds.length})
           </Label>
-          <Select onValueChange={(value) => setValue('primaryAssigneeId', value)}>
-            <SelectTrigger>
-              <SelectValue placeholder={isFetchingMembers ? 'Loading…' : 'Unassigned'} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              {members.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.firstName} {m.lastName}
-                </SelectItem>
-              ))}
-              {members.length === 0 && !isFetchingMembers && selectedProjectId && (
-                <SelectItem value="no-members" disabled>
-                  No members found in project
-                </SelectItem>
-              )}
-              {!selectedProjectId && (
-                <SelectItem value="no-project" disabled>
-                  Select a project first
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-start font-normal flex flex-wrap h-auto py-1 min-h-[40px]">
+                {assigneeIds.length === 0 ? 'Unassigned' : (
+                  <div className="flex flex-wrap gap-1">
+                    {assigneeIds.map(uid => {
+                      const m = members.find(x => x.id === uid);
+                      return m ? (
+                        <Badge key={uid} variant="secondary" className="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1">
+                          {m.firstName} {m.lastName}
+                          <X className="w-3 h-3 hover:text-indigo-900 cursor-pointer" onClick={(e) => {
+                            e.stopPropagation();
+                            setValue('assigneeIds', assigneeIds.filter(id => id !== uid));
+                          }} />
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-2" align="start">
+              <div className="font-semibold text-sm mb-2 text-gray-700">Select Assignees</div>
+              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                {members.map((m) => {
+                  const isSelected = assigneeIds.includes(m.id);
+                  return (
+                    <div 
+                      key={m.id} 
+                      className={`px-2 py-1.5 text-sm rounded cursor-pointer ${isSelected ? 'bg-indigo-50 text-indigo-700 font-medium' : 'hover:bg-gray-50'}`}
+                      onClick={() => {
+                        if (isSelected) setValue('assigneeIds', assigneeIds.filter(id => id !== m.id));
+                        else setValue('assigneeIds', [...assigneeIds, m.id]);
+                      }}
+                    >
+                      ✓ <span className={!isSelected ? 'opacity-0' : ''}></span> {m.firstName} {m.lastName}
+                    </div>
+                  );
+                })}
+                {members.length === 0 && <div className="text-sm text-gray-500 italic p-2">Select a project first</div>}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="space-y-1.5">

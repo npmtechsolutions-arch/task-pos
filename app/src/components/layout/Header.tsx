@@ -11,7 +11,7 @@ import {
   Sun,
   Monitor
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
 import { useAuthStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,12 +39,12 @@ import { TaskForm } from '@/components/tasks/TaskForm';
 
 export function Header() {
   const { user, logout } = useAuthStore();
-  const { theme, setTheme, sidebarCollapsed } = useUIStore();
+  const { theme, setTheme } = useUIStore();
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
 
   return (
     <header 
-      className="relative z-30 h-16 bg-white border-b border-gray-200"
+      className="relative z-30 h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
     >
       <div className="flex items-center justify-between h-full px-4">
         {/* Left side - Search */}

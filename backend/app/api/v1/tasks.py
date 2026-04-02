@@ -46,12 +46,19 @@ async def list_tasks(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TaskListResponse:
-    """List tasks with filters."""
+    """List tasks with filters. Super Admin sees ALL tasks; others see only their own."""
+    is_admin = getattr(current_user, 'role', '') in ('admin', 'super_admin', 'owner')
+
+    # Non-admins: always scope to their own tasks unless caller explicitly passed a filter
+    effective_assignee_id = primary_assignee_id
+    if not is_admin and not primary_assignee_id and not project_id:
+        effective_assignee_id = current_user.id
+
     filters = TaskFilterParams(
         project_id=project_id,
         status=status,
         priority=priority,
-        primary_assignee_id=primary_assignee_id,
+        primary_assignee_id=effective_assignee_id,
         search=search,
         page=page,
         per_page=per_page,
@@ -74,12 +81,20 @@ async def get_my_tasks(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> List[TaskResponse]:
-    """Get tasks assigned to current user."""
+    """Get tasks: Super Admin sees ALL tasks; regular users see only their own."""
     task_service = TaskService(db)
-    tasks = await task_service.get_user_tasks(
-        user_id=current_user.id,
-        status=status,
-    )
+    is_admin = getattr(current_user, 'role', '') in ('admin', 'super_admin', 'owner')
+
+    if is_admin:
+        # Super Admin → return all tasks (no status filter unless specified)
+        from app.schemas.task import TaskFilterParams
+        filters = TaskFilterParams(status=status, per_page=200)
+        tasks, _ = await task_service.list_tasks(filters=filters)
+    else:
+        tasks = await task_service.get_user_tasks(
+            user_id=current_user.id,
+            status=status,
+        )
 
     return [TaskResponse.model_validate(t) for t in tasks]
 

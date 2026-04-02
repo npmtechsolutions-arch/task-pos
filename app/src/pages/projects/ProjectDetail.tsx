@@ -5,11 +5,12 @@ import {
   ArrowLeft, Settings, Users, Flag, BarChart3, GitBranch,
   Plus, Calendar, DollarSign, Target, AlertTriangle, CheckCircle2,
   Clock, TrendingUp, PlayCircle, PauseCircle, Archive, Loader2,
-  ChevronDown
+  ChevronDown, Edit2, Save, X
 } from 'lucide-react';
 import { useProjectStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { PhasesPanel } from '@/components/projects/PhasesPanel';
 import { MilestonesPanel } from '@/components/projects/MilestonesPanel';
@@ -148,15 +149,15 @@ export function ProjectDetail() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC] dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4">
         <div className="max-w-7xl mx-auto">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">
-            <Link to="/projects" className="hover:text-gray-600 transition-colors">Projects</Link>
+          <div className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 mb-3">
+            <Link to="/projects" className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors">Projects</Link>
             <span>/</span>
-            <span className="text-gray-700 font-medium">{project.name}</span>
+            <span className="text-gray-700 dark:text-gray-200 font-medium">{project.name}</span>
           </div>
 
           {/* Project Header */}
@@ -168,7 +169,7 @@ export function ProjectDetail() {
               </div>
               <div>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{project.name}</h1>
                   <Badge className={cn('flex items-center gap-1 capitalize border-0 text-xs px-2 py-0.5', style.bg, style.text)}>
                     {style.icon}
                     {project.status.replace('_', ' ')}
@@ -189,6 +190,14 @@ export function ProjectDetail() {
 
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-4 flex-shrink-0 w-full lg:w-auto">
+              {/* Details page link */}
+              <Link
+                to={`/projects/${projectId}/details`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Details
+              </Link>
               {/* Quick stats */}
               <div className="flex items-center gap-6 text-sm flex-1 sm:flex-none justify-around sm:justify-start">
                 <div className="text-center">
@@ -312,6 +321,17 @@ export function ProjectDetail() {
 /* ─── Sub-panels ─────────────────────────────────────────────────────────── */
 
 function ProjectOverview({ project, budgetUtil }: { project: any; budgetUtil: number | null }) {
+  const [isEditingBudget, setIsEditingBudget] = useState(false);
+  const [budgetValue, setBudgetValue] = useState(project.budget || '');
+  const { updateProjectApi } = useProjectStore();
+
+  const handleBudgetSave = async () => {
+    try {
+      await updateProjectApi(project.id, { budget: Number(budgetValue) });
+      setIsEditingBudget(false);
+    } catch {}
+  };
+
   const cards = [
     {
       label: 'Budget',
@@ -347,7 +367,38 @@ function ProjectOverview({ project, budgetUtil }: { project: any; budgetUtil: nu
     <div className="space-y-6">
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((card) => (
+        {/* Budget Card with Inline Edit */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow relative group">
+          <div className="flex items-center justify-between mb-3 text-gray-500 text-sm">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-green-500" /> Budget
+            </div>
+            {!isEditingBudget && (
+              <button onClick={() => setIsEditingBudget(true)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-gray-400 hover:text-indigo-600">
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          {isEditingBudget ? (
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                <Input type="number" autoFocus value={budgetValue} onChange={e => setBudgetValue(e.target.value)} className="pl-6 h-8 text-lg font-bold" />
+              </div>
+              <Button size="icon" variant="ghost" onClick={handleBudgetSave} className="h-8 w-8 text-green-600 hover:bg-green-50"><Save className="w-4 h-4" /></Button>
+              <Button size="icon" variant="ghost" onClick={() => { setIsEditingBudget(false); setBudgetValue(project.budget); }} className="h-8 w-8 text-gray-400 hover:bg-gray-50"><X className="w-4 h-4" /></Button>
+            </div>
+          ) : (
+            <>
+              <div className={cn('text-2xl font-bold', budgetUtil != null && budgetUtil > 90 ? 'text-red-500' : 'text-green-600')}>
+                {project.budget ? `$${project.budget.toLocaleString()}` : 'Not set'}
+              </div>
+              {budgetUtil != null && <div className="text-xs text-gray-400 mt-1">{budgetUtil}% utilized</div>}
+            </>
+          )}
+        </div>
+
+        {cards.slice(1).map((card) => (
           <div key={card.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-2 text-gray-500 text-sm mb-3">
               {card.icon}

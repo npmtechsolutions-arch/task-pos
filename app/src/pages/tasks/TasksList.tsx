@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -10,7 +10,10 @@ import {
   MoreHorizontal,
   CheckSquare,
   Trash2,
-  Loader2
+  Loader2,
+  ChevronRight,
+  ChevronDown,
+  Users
 } from 'lucide-react';
 import { cn, formatDueDate, getPriorityColor, getStatusBgColor, getStatusLabel } from '@/lib/utils';
 import { useTaskStore, useProjectStore, useUIStore, useAuthStore } from '@/stores';
@@ -55,12 +58,12 @@ export function TasksList() {
   // The project whose board is shown in board view
   const [boardProjectId, setBoardProjectId] = useState<string>('');
 
-  // Load tasks assigned to current user + projects from PostgreSQL on mount
+  // Super Admin sees ALL tasks from the backend; regular users see only their assigned tasks
+  const isAdmin = ['admin', 'super_admin', 'owner'].includes(user?.role ?? '');
+
+  // Load tasks from PostgreSQL on mount — always via API, never state-only
   useEffect(() => {
-    if (user?.id) {
-      // Always fetch tasks assigned to the current user by default
-      fetchTasks({ primaryAssigneeId: user.id });
-    }
+    fetchTasks();
     if (projects.length === 0) fetchProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -97,9 +100,13 @@ export function TasksList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
-          <p className="text-gray-500 mt-1">
-            Manage and track your tasks across all projects
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {isAdmin ? 'All Tasks' : 'My Tasks'}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {isAdmin
+              ? 'Viewing all tasks across the organization'
+              : 'Manage and track your tasks across all projects'}
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -119,7 +126,7 @@ export function TasksList() {
             <TaskForm onSuccess={() => {
               setIsDialogOpen(false);
               // Re-fetch MY tasks so the new one shows up
-              if (user?.id) fetchTasks({ primaryAssigneeId: user.id });
+              if (user?.id) fetchMyTasks();
             }} />
           </DialogContent>
         </Dialog>
@@ -307,9 +314,20 @@ interface TaskListTableProps {
 }
 
 function TaskListTable({ tasks }: TaskListTableProps) {
+  const navigate = useNavigate();
   const { deleteTaskApi } = useTaskStore();
   const { addToast } = useUIStore();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleDelete = async (task: Task) => {
     if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
@@ -323,101 +341,154 @@ function TaskListTable({ tasks }: TaskListTableProps) {
       setDeletingId(null);
     }
   };
+
+  const rootTasks = tasks.filter(t => !t.parentId);
+
+  const renderTaskRow = (task: Task, level: number = 0) => {
+    const children = tasks.filter(t => t.parentId === task.id);
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedIds.has(task.id);
+
+    return (
+      <React.Fragment key={task.id}>
+        <tr 
+          className="border-b border-gray-100 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/40 cursor-pointer transition-colors"
+          onClick={() => navigate(`/tasks/${task.id}`)}
+        >
+          <td className="px-4 py-3 min-w-[300px]">
+            <div className="flex items-start" style={{ paddingLeft: `${level * 1.5}rem` }}>
+              {hasChildren ? (
+                <button 
+                  className="mr-2 p-0.5 mt-0.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded text-gray-500" 
+                  onClick={(e) => toggleExpand(e, task.id)}
+                >
+                  {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+              ) : (
+                <div className="w-6 h-6 mr-2" />
+              )}
+              <div>
+                <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  {task.title}
+                </div>
+                <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1">
+                  {task.description || `${task.project?.key ?? '???'}-${task.taskNumber ?? task.id.slice(0,6)}`}
+                </div>
+              </div>
+            </div>
+          </td>
+          <td className="px-4 py-3">
+            <Badge variant="secondary" className={getStatusBgColor(task.status)}>
+              {getStatusLabel(task.status)}
+            </Badge>
+          </td>
+          <td className="px-4 py-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: getPriorityColor(task.priority) }}
+              />
+              <span className="text-sm capitalize text-gray-700 dark:text-gray-300">
+                {task.priority}
+              </span>
+            </div>
+          </td>
+          <td className="px-4 py-3 whitespace-nowrap">
+            {task.assignees && task.assignees.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <Avatar className="w-6 h-6 flex-shrink-0">
+                    <AvatarImage src={task.assignees[0].avatarUrl} />
+                    <AvatarFallback className="text-[10px]">
+                      {task.assignees[0].firstName[0]}{task.assignees[0].lastName[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                    {task.assignees[0].firstName} {task.assignees[0].lastName}
+                  </span>
+                </div>
+                {task.assignees.length > 1 && (
+                  <div className="text-[10px] text-gray-500 ml-8 font-medium">
+                    +{task.assignees.length - 1} more
+                  </div>
+                )}
+              </div>
+            ) : task.primaryAssignee ? (
+              <div className="flex items-center gap-2">
+                <Avatar className="w-6 h-6 flex-shrink-0">
+                  <AvatarImage src={task.primaryAssignee.avatarUrl} />
+                  <AvatarFallback className="text-[10px]">
+                    {task.primaryAssignee.firstName[0]}{task.primaryAssignee.lastName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {task.primaryAssignee.firstName} {task.primaryAssignee.lastName}
+                </span>
+              </div>
+            ) : (
+              <span className="text-sm text-gray-400 dark:text-gray-500">Unassigned</span>
+            )}
+          </td>
+          <td className="px-4 py-3 whitespace-nowrap">
+            <span className={cn(
+              'text-sm',
+              task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
+                ? 'text-red-600 font-medium'
+                : 'text-gray-600 dark:text-gray-400'
+            )}>
+              {task.dueDate ? formatDueDate(task.dueDate) : '—'}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" disabled={deletingId === task.id}>
+                  {deletingId === task.id
+                    ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                    : <MoreHorizontal className="w-4 h-4 text-gray-500 hover:text-gray-700" />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link to={`/tasks/${task.id}`}>View Details</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                   className="text-red-600"
+                   onClick={(e) => { e.preventDefault(); handleDelete(task); }}
+                   disabled={deletingId === task.id}
+                 >
+                   <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                 </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </td>
+        </tr>
+        {isExpanded && children.map(child => renderTaskRow(child, level + 1))}
+      </React.Fragment>
+    );
+  };
+
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-200">
+        <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
           <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Task</th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Priority</th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Assignee</th>
-            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Due Date</th>
-            <th className="px-4 py-3 text-right text-sm font-medium text-gray-700">Actions</th>
+            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Task</th>
+            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Status</th>
+            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Priority</th>
+            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Assignee</th>
+            <th className="px-4 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Due Date</th>
+            <th className="px-4 py-3 text-right text-sm font-medium text-gray-700 dark:text-gray-300">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
-          {tasks.map((task) => (
-            <tr key={task.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3">
-                <div>
-                  <Link
-                    to={`/tasks/${task.id}`}
-                    className="font-medium text-gray-900 hover:text-blue-600"
-                  >
-                    {task.title}
-                  </Link>
-                  <p className="text-sm text-gray-500">
-                    {task.project.key}-{task.taskNumber}
-                  </p>
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                <Badge variant="secondary" className={getStatusBgColor(task.status)}>
-                  {getStatusLabel(task.status)}
-                </Badge>
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: getPriorityColor(task.priority) }}
-                  />
-                  <span className="text-sm capitalize">{task.priority}</span>
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                {task.primaryAssignee ? (
-                  <div className="flex items-center gap-2">
-                    <Avatar className="w-6 h-6">
-                      <AvatarImage src={task.primaryAssignee.avatarUrl} />
-                      <AvatarFallback className="text-[10px]">
-                        {task.primaryAssignee.firstName[0]}{task.primaryAssignee.lastName[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm text-gray-600">
-                      {task.primaryAssignee.firstName} {task.primaryAssignee.lastName}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-sm text-gray-400">Unassigned</span>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <span className={cn(
-                  'text-sm',
-                  task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
-                    ? 'text-red-600'
-                    : 'text-gray-600'
-                )}>
-                  {task.dueDate ? formatDueDate(task.dueDate) : '—'}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" disabled={deletingId === task.id}>
-                      {deletingId === task.id
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <MoreHorizontal className="w-4 h-4" />}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild>
-                      <Link to={`/tasks/${task.id}`}>View Details</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-red-600"
-                      onClick={() => handleDelete(task)}
-                      disabled={deletingId === task.id}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </td>
+        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+          {rootTasks.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="text-center py-8 text-gray-500">No tasks found.</td>
             </tr>
-          ))}
+          ) : (
+            rootTasks.map((task) => renderTaskRow(task, 0))
+          )}
         </tbody>
       </table>
     </div>
@@ -444,7 +515,7 @@ function TaskCalendar({ tasks }: TaskListTableProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">
           {today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}

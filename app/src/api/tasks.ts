@@ -15,6 +15,7 @@ export interface TaskCreatePayload {
   project_id: string;
   parent_id?: string | null;
   primary_assignee_id?: string | null;
+  assignee_ids?: string[];
   priority?: 'lowest' | 'low' | 'medium' | 'high' | 'highest';
   task_type?: 'task' | 'bug' | 'story' | 'epic' | 'subtask';
   due_date?: string | null;
@@ -30,6 +31,7 @@ export interface TaskUpdatePayload {
   status?: string;
   priority?: string;
   primary_assignee_id?: string | null;
+  assignee_ids?: string[];
   due_date?: string | null;
   start_date?: string | null;
   estimated_hours?: number | null;
