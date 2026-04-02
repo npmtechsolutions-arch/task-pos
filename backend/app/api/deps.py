@@ -10,6 +10,7 @@ from app.core.logging import get_logger
 from app.core.security import decode_token
 from app.db.session import get_db_session
 from app.models.user import User, UserRole
+from app.models.tenant import Tenant
 from app.services.user import UserService
 
 logger = get_logger(__name__)
@@ -69,6 +70,13 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_tenant(
+    current_user: User = Depends(get_current_user),
+) -> Tenant:
+    """Get current user's tenant context."""
+    return current_user.tenant
 
 
 async def get_current_active_user(

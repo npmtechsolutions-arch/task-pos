@@ -16,6 +16,8 @@ from app.schemas.user import (
 )
 from app.services.auth import AuthService
 from app.services.user import UserService
+from app.services.tenant import TenantService
+from app.schemas.tenant import OrganizationSignup
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -41,6 +43,33 @@ async def signup(
     tokens = await auth_service._generate_tokens(user)
     logger.info("New user registered", user_id=user.id, email=user.email)
     return tokens
+
+
+@router.post("/register-org", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register_org(
+    signup_data: OrganizationSignup,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Register a new organization and its owner."""
+    tenant_service = TenantService(db)
+    auth_service = AuthService(db)
+    user_service = UserService(db)
+
+    try:
+        # This creates both tenant and owner
+        tenant = await tenant_service.register_organization(signup_data)
+        
+        # Get the owner we just created (should be the only user in the new tenant)
+        user = await user_service.get_by_email(signup_data.user.email)
+        
+        tokens = await auth_service._generate_tokens(user)
+        logger.info("Organization and owner registered", tenant_id=tenant.id, user_id=user.id)
+        return tokens
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
 
 
 @router.post("/login", response_model=TokenResponse)

@@ -18,15 +18,28 @@ async def seed_custom_admin():
         from app.models.user import UserRole
         from app.schemas.project import ProjectCreate, ProjectVisibility, ProjectFilterParams
         from app.schemas.task import TaskCreate, TaskPriority
+        from app.services.tenant import TenantService
+        from app.schemas.tenant import TenantCreate
 
         async with AsyncSessionLocal() as db:
+            # Ensure default tenant exists
+            tenant_service = TenantService(db)
+            default_tenant = await tenant_service.get_by_slug("default")
+            if not default_tenant:
+                logger.info("Creating default tenant...")
+                default_tenant = await tenant_service.create(TenantCreate(
+                    name="Default Organization",
+                    slug="default"
+                ))
+            
             user_service = UserService(db)
             user_data = UserCreate(
                 email="admin", 
                 password="271527",
                 first_name="Super",
                 last_name="Admin",
-                role=UserRole.ADMIN
+                role=UserRole.ADMIN,
+                tenant_id=default_tenant.id
             )
             
             existing_user = await user_service.get_by_email(email="admin")
@@ -60,6 +73,7 @@ async def seed_custom_admin():
                     description="Complete overhaul of company website with modern design",
                     key="WEB",
                     visibility=ProjectVisibility.PRIVATE,
+                    tenant_id=default_tenant.id
                 ), owner_id=existing_user.id)
 
                 # Project 2
@@ -68,6 +82,7 @@ async def seed_custom_admin():
                     description="Build native mobile apps for iOS and Android",
                     key="MOB",
                     visibility=ProjectVisibility.PRIVATE,
+                    tenant_id=default_tenant.id
                 ), owner_id=existing_user.id)
 
                 # Project 3
@@ -76,6 +91,7 @@ async def seed_custom_admin():
                     description="First quarter marketing initiatives and campaigns",
                     key="MKT",
                     visibility=ProjectVisibility.PRIVATE,
+                    tenant_id=default_tenant.id
                 ), owner_id=existing_user.id)
 
                 # Seed some tasks
@@ -83,6 +99,7 @@ async def seed_custom_admin():
                     title="Design homepage mockups",
                     description="Create 3 different design concepts for the new homepage",
                     project_id=p1.id,
+                    tenant_id=default_tenant.id,
                     primary_assignee_id=existing_user.id,
                     priority=TaskPriority.HIGH,
                     estimated_hours=16.0
@@ -91,6 +108,7 @@ async def seed_custom_admin():
                 await task_service.create(TaskCreate(
                     title="Optimize images for web",
                     project_id=p1.id,
+                    tenant_id=default_tenant.id,
                     primary_assignee_id=existing_user.id,
                     priority=TaskPriority.LOW,
                     estimated_hours=8.0

@@ -23,6 +23,7 @@ class UserCreate(UserBase):
 
     password: str = Field(..., min_length=5, max_length=100)
     role: UserRole = UserRole.MEMBER
+    tenant_id: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -45,6 +46,7 @@ class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    tenant_id: str
     avatar_url: Optional[str] = None
     status: UserStatus
     role: UserRole

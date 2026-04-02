@@ -98,6 +98,12 @@ class Settings(BaseSettings):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and "+asyncpg" not in url:
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            
+        # Ensure SSL for production/cloud environments if missing
+        if "ssl=" not in url:
+            separator = "&" if "?" in url else "?"
+            url = f"{url}{separator}ssl=require"
+            
         return url
 
 

@@ -28,4 +28,22 @@ class Base(DeclarativeBase):
         }
 
 
-
+# Register all models for Alembic autogenerate
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.models.project import Project, ProjectMember, ProjectPhase
+from app.models.task import (
+    Task, Tag, KanbanLabel, TaskDependency, TaskComment, 
+    TimeEntry, TaskAssignment, TaskActivity
+)
+from app.models.org_team import OrgTeam, OrgTeamMember, ReportingStructure
+from app.models.employee import SkillCategory, Skill, UserSkill
+from app.models.board import Board, BoardColumn, BoardSwimlane
+from app.models.milestone import Milestone
+from app.models.timesheet import Timesheet, TimesheetEntry
+from app.models.landing import (
+    LandingNavbar, LandingHero, LandingStat, LandingFeature,
+    LandingTestimonial, LandingBadge, PricingTier, PricingFeature,
+    FooterCategory, FooterLink, LandingAbout, LandingStep,
+    LandingCTA, LandingContact, LandingLead
+)

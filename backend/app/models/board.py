@@ -13,6 +13,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.project import Project
+    from app.models.tenant import Tenant
 
 
 class BoardColumnType(str, PyEnum):
@@ -30,11 +31,16 @@ class Board(Base):
     """Kanban board model."""
 
     __tablename__ = "boards"
-
     id: Mapped[str] = mapped_column(
         String(36),
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     project_id: Mapped[str] = mapped_column(

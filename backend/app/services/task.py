@@ -148,6 +148,7 @@ class TaskService:
         # Create task
         task = Task(
             project_id=task_data.project_id,
+            tenant_id=task_data.tenant_id,
             parent_id=task_data.parent_id,
             title=task_data.title,
             description=task_data.description,
@@ -172,6 +173,7 @@ class TaskService:
                 is_primary = (uid == task_data.primary_assignee_id)
                 assignment = TaskAssignment(
                     task_id=task.id,
+                    tenant_id=task.tenant_id,
                     user_id=uid,
                     assigned_by=reporter_id,
                     is_primary=is_primary
@@ -182,6 +184,7 @@ class TaskService:
             from app.models.task import TaskAssignment
             self.db.add(TaskAssignment(
                 task_id=task.id,
+                tenant_id=task.tenant_id,
                 user_id=task_data.primary_assignee_id,
                 assigned_by=reporter_id,
                 is_primary=True

@@ -14,6 +14,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.project import ProjectMember
     from app.models.task import Task, TaskComment, TimeEntry
+    from app.models.tenant import Tenant
 
 
 class UserRole(str, PyEnum):
@@ -44,6 +45,12 @@ class User(Base):
         String(36),
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     email: Mapped[str] = mapped_column(
         String(255),
@@ -104,6 +111,7 @@ class User(Base):
     )
 
     # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
     project_memberships: Mapped[List["ProjectMember"]] = relationship(
         "ProjectMember",
         foreign_keys="ProjectMember.user_id",

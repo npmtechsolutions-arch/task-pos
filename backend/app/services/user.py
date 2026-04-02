@@ -69,10 +69,14 @@ class UserService:
         if existing:
             raise ValueError("Email already registered")
 
+        if not user_data.tenant_id:
+            raise ValueError("Tenant ID is required for user creation")
+
         # Create user
         user = User(
             email=user_data.email.lower(),
             password_hash=get_password_hash(user_data.password),
+            tenant_id=user_data.tenant_id,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
             timezone=user_data.timezone,

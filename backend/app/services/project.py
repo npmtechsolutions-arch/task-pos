@@ -109,6 +109,7 @@ class ProjectService:
         # Create project
         project = Project(
             name=project_data.name,
+            tenant_id=project_data.tenant_id,
             description=project_data.description,
             key=project_data.key.upper(),
             visibility=project_data.visibility,

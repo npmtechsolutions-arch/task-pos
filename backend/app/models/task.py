@@ -25,6 +25,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.project import Project
+    from app.models.tenant import Tenant
 
 
 class TaskStatus(str, PyEnum):
@@ -172,6 +173,12 @@ class Task(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Project
     project_id: Mapped[str] = mapped_column(
@@ -180,6 +187,7 @@ class Task(Base):
     project: Mapped["Project"] = relationship(
         "Project", back_populates="tasks", lazy="selectin"
     )
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="tasks")
 
     # Parent/Subtask relationship
     parent_id: Mapped[Optional[str]] = mapped_column(
@@ -328,6 +336,12 @@ class TaskAssignment(Base):
     task_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tasks.id"), nullable=False, index=True
     )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     task: Mapped["Task"] = relationship("Task", back_populates="assignments")
 
     user_id: Mapped[str] = mapped_column(
@@ -354,6 +368,12 @@ class TaskActivity(Base):
     )
     task_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tasks.id"), nullable=False, index=True
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     task: Mapped["Task"] = relationship("Task", back_populates="activity_logs")
 
@@ -391,6 +411,12 @@ class TaskComment(Base):
     )
     task_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tasks.id"), nullable=False, index=True
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     task: Mapped["Task"] = relationship("Task", back_populates="comments", lazy="selectin")
 
@@ -440,6 +466,12 @@ class TimeEntry(Base):
     )
     task_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tasks.id"), nullable=False, index=True
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     task: Mapped["Task"] = relationship("Task", back_populates="time_entries", lazy="selectin")
 

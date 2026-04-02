@@ -24,6 +24,7 @@ class ProjectCreate(ProjectBase):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     settings: Optional[dict] = None
+    tenant_id: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -83,6 +84,7 @@ class ProjectResponse(ProjectBase):
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
     owner_id: str
+    tenant_id: str
     owner: UserResponse
     settings: dict
     custom_fields: dict

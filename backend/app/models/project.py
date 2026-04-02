@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.task import Task
     from app.models.milestone import Milestone
+    from app.models.tenant import Tenant
     from app.models.workflow import WorkflowTemplate
 
 
@@ -103,6 +104,12 @@ class Project(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     key: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
@@ -182,6 +189,7 @@ class Project(Base):
     archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     # --- Relationships ---
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="projects")
     members: Mapped[List["ProjectMember"]] = relationship(
         "ProjectMember", back_populates="project", lazy="selectin", cascade="all, delete-orphan"
     )

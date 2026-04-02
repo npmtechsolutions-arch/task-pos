@@ -139,6 +139,7 @@ class TaskCreate(TaskBase):
     """Task creation schema."""
 
     project_id: str
+    tenant_id: Optional[str] = None
     parent_id: Optional[str] = None
     primary_assignee_id: Optional[str] = None
     assignee_ids: Optional[List[str]] = None
@@ -179,6 +180,7 @@ class TaskResponse(TaskBase):
 
     id: str
     project_id: str
+    tenant_id: str
     parent_id: Optional[str] = None
     status: TaskStatus
     primary_assignee_id: Optional[str] = None

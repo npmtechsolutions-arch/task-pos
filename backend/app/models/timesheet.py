@@ -3,7 +3,13 @@
 import uuid
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.models.task import Task
+    from app.models.project import Project
 
 from sqlalchemy import (
     Boolean,
@@ -37,6 +43,12 @@ class Timesheet(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -60,6 +72,9 @@ class Timesheet(Base):
     )
 
     # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="timesheets")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
+    approver: Mapped[Optional["User"]] = relationship("User", foreign_keys=[approved_by_id], lazy="selectin")
     entries: Mapped[List["TimesheetEntry"]] = relationship(
         "TimesheetEntry", back_populates="timesheet", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -75,6 +90,12 @@ class TimesheetEntry(Base):
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     timesheet_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("timesheets.id", ondelete="CASCADE"), nullable=False, index=True

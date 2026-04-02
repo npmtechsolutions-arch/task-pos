@@ -12,6 +12,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.tenant import Tenant
 
 
 class OrgTeamType(str, PyEnum):
@@ -35,6 +36,12 @@ class OrgTeam(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     team_type: Mapped[OrgTeamType] = mapped_column(default=OrgTeamType.PERMANENT)
@@ -49,6 +56,8 @@ class OrgTeam(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    # Relationships
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="teams")
     creator: Mapped[Optional["User"]] = relationship(
         "User", foreign_keys=[created_by], lazy="selectin"
     )
