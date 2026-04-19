@@ -1,10 +1,40 @@
-import { useEffect, useRef, useState } from 'react';
-import { Bell, Check, CheckCheck, Trash2, ExternalLink, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Bell, Check, CheckCheck, Trash2, ExternalLink, Loader2, Volume2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores';
 import { Button } from '@/components/ui/button';
+
+const POLL_INTERVAL = 30_000; // 30 seconds
+
+// Request browser notification permission once
+async function requestPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
+
+// Vibrate + browser push for new notification
+function triggerNotificationAlert(title: string, body: string) {
+  // Vibration API (mobile/some browsers)
+  if ('vibrate' in navigator) {
+    navigator.vibrate([200, 100, 200]);
+  }
+  // Browser Notification
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      const n = new Notification(title, {
+        body,
+        icon: '/favicon.ico',
+        badge: '/favicon.ico',
+        tag: 'app-notification',
+        renotify: true,
+      });
+      setTimeout(() => n.close(), 5000);
+    } catch {}
+  }
+}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -42,6 +72,39 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
+  const prevUnreadRef = useRef<number>(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Request browser notification permission on mount
+  useEffect(() => { requestPermission(); }, []);
+
+  // Initial load
+  useEffect(() => {
+    if (token) fetchNotifications(token, true);
+  }, [token]);
+
+  // 30-second polling for new notifications
+  useEffect(() => {
+    if (!token) return;
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      fetchNotifications(token, true);
+    }, POLL_INTERVAL);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [token]);
+
+  // Detect new unread notifications and trigger alert
+  useEffect(() => {
+    const prev = prevUnreadRef.current;
+    if (unreadCount > prev && prev >= 0) {
+      // New notification arrived
+      const newest = notifications.find(n => !n.is_read);
+      if (newest) {
+        triggerNotificationAlert(newest.title, newest.message);
+      }
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount]);
 
   // Fetch on open
   useEffect(() => {
@@ -49,12 +112,6 @@ export function NotificationBell() {
       fetchNotifications(token, true);
     }
   }, [open, token]);
-
-  // Initial unread count on mount
-  useEffect(() => {
-    if (token) fetchNotifications(token, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
 
   // Close on outside click
   useEffect(() => {
@@ -85,7 +142,10 @@ export function NotificationBell() {
         className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
         aria-label="Notifications"
       >
-        <Bell className="w-5 h-5 text-gray-600" />
+        <Bell className={cn(
+            "w-5 h-5 text-gray-600",
+            unreadCount > 0 && "animate-[bell-shake_0.5s_ease-in-out]"
+          )} />
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
             {unreadCount > 9 ? '9+' : unreadCount}

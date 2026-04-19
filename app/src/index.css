@@ -109,3 +109,12 @@
   background-color: hsl(222 47% 11%);
   border-color: hsl(222 20% 20%);
 }
+
+@keyframes bell-shake {
+  0% { transform: rotate(0); }
+  20% { transform: rotate(15deg); }
+  40% { transform: rotate(-10deg); }
+  60% { transform: rotate(5deg); }
+  80% { transform: rotate(-5deg); }
+  100% { transform: rotate(0); }
+}
