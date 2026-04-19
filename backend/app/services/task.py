@@ -360,8 +360,11 @@ class TaskService:
         self, task_id: str, comment_data: TaskCommentCreate, author_id: str
     ) -> TaskComment:
         """Add comment to task."""
+        # Get task to inherit tenant_id
+        task = await self.get_by_id(task_id)
         comment = TaskComment(
             task_id=task_id,
+            tenant_id=task.tenant_id if task else None,
             author_id=author_id,
             content=comment_data.content,
             parent_id=comment_data.parent_id,
@@ -413,8 +416,11 @@ class TaskService:
         self, task_id: str, entry_data: TimeEntryCreate, user_id: str
     ) -> TimeEntry:
         """Add time entry to task."""
+        # Get task to inherit tenant_id
+        task = await self.get_by_id(task_id)
         entry = TimeEntry(
             task_id=task_id,
+            tenant_id=task.tenant_id if task else None,
             user_id=user_id,
             started_at=entry_data.started_at,
             ended_at=entry_data.ended_at,
@@ -426,7 +432,6 @@ class TaskService:
         self.db.add(entry)
 
         # Update task actual hours
-        task = await self.get_by_id(task_id)
         if task:
             hours = entry_data.duration_minutes / 60
             task.actual_hours += hours

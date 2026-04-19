@@ -15,6 +15,7 @@ import {
   Clock,
   ShieldCheck,
   Kanban,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUIStore, useProjectStore } from '@/stores';
@@ -41,6 +42,7 @@ const mainNavigation = [
   { name: 'Projects',   href: '/projects',   icon: FolderKanban },
   { name: 'My Tasks',   href: '/tasks',      icon: CheckSquare },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
+  { name: 'PRD Upload', href: '/prd-upload', icon: FileText },
   { name: 'HR & Org',   href: '/hr',         icon: Users },
   { name: 'Calendar',   href: '/calendar',   icon: Calendar },
   { name: 'Reports',    href: '/reports',    icon: BarChart3 },

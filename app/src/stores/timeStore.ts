@@ -15,6 +15,7 @@ interface TimeState {
   logTime: (taskId: string, hours: number, description?: string) => Promise<void>;
   submitTimesheet: (timesheetId: string) => Promise<void>;
   approveTimesheet: (timesheetId: string) => Promise<void>;
+  processAgenticInput: (input: string) => Promise<any>;
 }
 
 export const useTimeStore = create<TimeState>((set, get) => ({
@@ -84,6 +85,25 @@ export const useTimeStore = create<TimeState>((set, get) => ({
       get().fetchMyTimesheets();
     } catch (err: any) {
       console.error("Failed to approve timesheet:", err);
+    }
+  },
+
+  processAgenticInput: async (input: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axios.post(`${API_URL}/timesheets/agentic-entry`, {
+        natural_language_input: input
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      set({ isLoading: false });
+      return response.data;
+    } catch (err: any) {
+      set({
+        error: err.response?.data?.detail || 'Failed to process AI input',
+        isLoading: false
+      });
+      throw err;
     }
   },
 }));

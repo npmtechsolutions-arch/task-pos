@@ -15,10 +15,9 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.project import Project
     from app.models.task import Task
-    from app.models.org_team import OrgTeam as Team
+    from app.models.org_team import OrgTeam
     from app.models.milestone import Milestone
     from app.models.timesheet import Timesheet
-    from app.models.board import Board
 
 
 class TenantStatus(str, PyEnum):
@@ -66,8 +65,8 @@ class Tenant(Base):
     tasks: Mapped[List["Task"]] = relationship(
         "Task", back_populates="tenant", cascade="all, delete-orphan"
     )
-    teams: Mapped[List["Team"]] = relationship(
-        "Team", back_populates="tenant", cascade="all, delete-orphan"
+    teams: Mapped[List["OrgTeam"]] = relationship(
+        "OrgTeam", back_populates="tenant", cascade="all, delete-orphan"
     )
     milestones: Mapped[List["Milestone"]] = relationship(
         "Milestone", back_populates="tenant", cascade="all, delete-orphan"
@@ -75,9 +74,7 @@ class Tenant(Base):
     timesheets: Mapped[List["Timesheet"]] = relationship(
         "Timesheet", back_populates="tenant", cascade="all, delete-orphan"
     )
-    boards: Mapped[List["Board"]] = relationship(
-        "Board", back_populates="tenant", cascade="all, delete-orphan"
-    )
+
 
     def __repr__(self) -> str:
         return f"<Tenant {self.name} ({self.id})>"

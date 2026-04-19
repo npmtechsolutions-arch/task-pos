@@ -40,10 +40,10 @@ class Department(Base):
     )
 
 
-class Role(Base):
-    """Custom roles for the organization."""
+class HRCustomRole(Base):
+    """Custom HR roles for the organization (distinct from RBAC roles)."""
 
-    __tablename__ = "roles"
+    __tablename__ = "hr_custom_roles"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())

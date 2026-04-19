@@ -31,6 +31,8 @@ import { SuperAdminPage } from '@/pages/admin/SuperAdminPage';
 import { HRPage } from '@/pages/hr/HRPage';
 // Kanban (standalone board)
 import { KanbanPage } from '@/pages/kanban/KanbanPage';
+// PRD Upload
+import PRDUploadPage from '@/pages/documents/PRDUploadPage';
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -245,6 +247,18 @@ export function AppRoutes() {
         }
       >
         <Route index element={<HRPage />} />
+      </Route>
+
+      {/* PRD Upload */}
+      <Route
+        path="/prd-upload"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<PRDUploadPage />} />
       </Route>
     </Routes>
   );

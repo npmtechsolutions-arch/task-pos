@@ -3,6 +3,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Briefcase, Clock, CheckCircle2, TrendingUp } from 'lucide-react';
 import { useTimeStore } from '@/stores';
+import { AIAssistantWidget } from '@/components/timesheets/AIAssistantWidget';
+import { useState } from 'react';
 
 export default function TimesheetsPage() {
   const { timesheets } = useTimeStore();
@@ -16,6 +18,8 @@ export default function TimesheetsPage() {
 
   const WeeklyStatus = currentSheet?.totalHours >= 40 ? 'Completed' : 'On Track';
   const statusColor = currentSheet?.totalHours >= 40 ? 'green' : 'blue';
+
+  const [aiInsight, setAiInsight] = useState<string>("Describe your task in natural language below to let AI analyze and categorize your productivity.");
 
   return (
     <div className="container mx-auto p-6 max-w-7xl animate-in fade-in duration-500">
@@ -45,7 +49,11 @@ export default function TimesheetsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Main Grid */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 space-y-6">
+          <AIAssistantWidget onInsightGenerated={(res) => {
+            const bestInsight = res.alerts[0] || res.insights[0] || `${res.task} automatically tracked successfully.`;
+            setAiInsight(bestInsight);
+          }} />
           <TimesheetGrid />
         </div>
 
@@ -61,8 +69,8 @@ export default function TimesheetsPage() {
             </CardHeader>
             <div className="px-6 pb-6 relative">
               <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-                <p className="text-sm leading-relaxed">
-                  "You're 15% more productive in the mornings. Consider tackling complex coding tasks before 11 AM to maximize efficiency."
+                <p className="text-sm leading-relaxed transition-all duration-300">
+                  {aiInsight}
                 </p>
               </div>
             </div>

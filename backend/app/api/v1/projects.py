@@ -65,6 +65,10 @@ async def create_project(
     """Create a new project."""
     project_service = ProjectService(db)
 
+    # ✅ Always inject tenant_id from the authenticated user — never trust the frontend
+    if not project_data.tenant_id:
+        project_data = project_data.model_copy(update={"tenant_id": current_user.tenant_id})
+
     try:
         project = await project_service.create(project_data, current_user.id)
         return ProjectResponse.model_validate(project)

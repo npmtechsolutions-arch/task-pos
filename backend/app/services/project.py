@@ -53,19 +53,36 @@ class ProjectService:
         )
         return result.scalar_one_or_none()
 
+    async def _is_system_admin(self, user_id: str) -> bool:
+        """Check if user has a system-wide admin/super_admin role."""
+        result = await self.db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        return user is not None and getattr(user, 'role', '') in ('admin', 'super_admin', 'owner')
+
     async def list_projects(
         self,
         user_id: str,
         filters: Optional[ProjectFilterParams] = None,
     ) -> tuple[List[Project], int]:
-        """List projects accessible to user with filters."""
-        # Base query - projects user is member of or owns
-        query = (
-            select(Project)
-            .join(ProjectMember, Project.id == ProjectMember.project_id)
-            .where(ProjectMember.user_id == user_id)
-            .where(Project.status != ProjectStatus.ARCHIVED)
-        )
+        """List projects accessible to user with filters. Super admins see ALL projects."""
+        is_admin = await self._is_system_admin(user_id)
+
+        if is_admin:
+            # Super Admin sees all non-archived projects
+            query = (
+                select(Project)
+                .where(Project.status != ProjectStatus.ARCHIVED)
+            )
+        else:
+            # Regular users — only projects they are a member of
+            query = (
+                select(Project)
+                .join(ProjectMember, Project.id == ProjectMember.project_id)
+                .where(ProjectMember.user_id == user_id)
+                .where(Project.status != ProjectStatus.ARCHIVED)
+            )
 
         if filters:
             if filters.status:
@@ -101,6 +118,17 @@ class ProjectService:
 
         logger.info("Creating new project", name=project_data.name, owner=owner_id)
 
+        # Resolve tenant_id — must never be None
+        tenant_id = project_data.tenant_id
+        if not tenant_id:
+            # Fallback: load owner's tenant_id from DB
+            result = await self.db.execute(select(User).where(User.id == owner_id))
+            owner_user = result.scalar_one_or_none()
+            if owner_user:
+                tenant_id = owner_user.tenant_id
+        if not tenant_id:
+            raise ValueError("Cannot create project: tenant_id could not be resolved.")
+
         # Check if key already exists
         existing = await self.get_by_key(project_data.key)
         if existing:
@@ -109,7 +137,7 @@ class ProjectService:
         # Create project
         project = Project(
             name=project_data.name,
-            tenant_id=project_data.tenant_id,
+            tenant_id=tenant_id,
             description=project_data.description,
             key=project_data.key.upper(),
             visibility=project_data.visibility,
@@ -123,17 +151,19 @@ class ProjectService:
         self.db.add(project)
         await self.db.flush()  # Flush to get project ID
 
-        # Add owner as project admin
+        # Add owner as project admin (with tenant_id)
         owner_member = ProjectMember(
             project_id=project.id,
+            tenant_id=tenant_id,
             user_id=owner_id,
-            role=ProjectMemberRole.ADMIN,  # Set creator as Admin
+            role=ProjectMemberRole.ADMIN,
         )
         self.db.add(owner_member)
 
-        # Auto-generate default Kanban Board
+        # Auto-generate default Kanban Board (with tenant_id)
         board = Board(
             project_id=project.id,
+            tenant_id=tenant_id,
             name=f"{project.key} Board"
         )
         self.db.add(board)
@@ -147,7 +177,7 @@ class ProjectService:
             ("Review", BoardColumnType.REVIEW, "#8B5CF6", 3),
             ("Done", BoardColumnType.DONE, "#10B981", 4)
         ]
-        
+
         for name, col_type, color, position in default_columns:
             column = BoardColumn(
                 board_id=board.id,
@@ -296,12 +326,15 @@ class ProjectService:
         return result.scalar_one_or_none()
 
     async def is_project_member(self, project_id: str, user_id: str) -> bool:
-        """Check if user is a project member OR the project owner."""
-        # First check explicit membership in project_members table
+        """Check if user is a project member, owner, OR a system-level super_admin."""
+        # Super Admin / system admin bypass — no need to be in project_members
+        if await self._is_system_admin(user_id):
+            return True
+        # Explicit project membership
         member = await self.get_member(project_id, user_id)
         if member is not None:
             return True
-        # Also allow the project owner (they may not be in members table)
+        # Project owner (they may not be in members table)
         project = await self.get_by_id(project_id)
         if project and str(project.owner_id) == str(user_id):
             return True
@@ -318,7 +351,11 @@ class ProjectService:
             ProjectMemberRole.OWNER: 4,
         }
 
-        # Project owner always has OWNER-level access, even without a member record
+        # Super Admin always has OWNER-level access across all projects
+        if await self._is_system_admin(user_id):
+            return True
+
+        # Project owner always has OWNER-level access
         project = await self.get_by_id(project_id)
         if project and str(project.owner_id) == str(user_id):
             return role_hierarchy.get(ProjectMemberRole.OWNER, 0) >= role_hierarchy.get(min_role, 0)

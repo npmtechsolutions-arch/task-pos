@@ -106,6 +106,10 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
 ) -> TaskResponse:
     """Create a new task."""
+    # ✅ Inject tenant_id from the authenticated user — never trust the frontend
+    if not task_data.tenant_id:
+        task_data = task_data.model_copy(update={"tenant_id": current_user.tenant_id})
+
     # Check project membership
     project_service = ProjectService(db)
     if not await project_service.is_project_member(

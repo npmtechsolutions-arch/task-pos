@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.models.hr_hierarchy import Department, HRAssignment, HRRole, Role
+from app.models.hr_hierarchy import Department, HRAssignment, HRRole, HRCustomRole as Role
 from app.models.user import User, UserRole
 
 router = APIRouter()

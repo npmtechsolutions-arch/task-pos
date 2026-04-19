@@ -14,8 +14,9 @@ export function Login() {
   const { login, isLoading, error } = useAuthStore();
   const { addToast } = useUIStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('admin');
+  const [email, setEmail] = useState('admin@projectflow.com');
   const [password, setPassword] = useState('271527');
+
   const [rememberMe, setRememberMe] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -141,10 +142,24 @@ export function Login() {
 
               {/* Demo Credentials */}
               <div className="p-3 rounded-lg bg-blue-50 text-sm">
-                <p className="font-medium text-blue-900 mb-1">Demo Credentials:</p>
-                <p className="text-blue-700">Username: admin</p>
-                <p className="text-blue-700">Password: 271527</p>
+                <p className="font-medium text-blue-900 mb-2">Demo Credentials (click to fill):</p>
+                {[
+                  { label: 'Super Admin', email: 'admin@projectflow.com', pass: '271527' },
+                  { label: 'Project Manager', email: 'pm@projectflow.com', pass: 'Password@123' },
+                  { label: 'Developer', email: 'dev1@projectflow.com', pass: 'Password@123' },
+                ].map((cred) => (
+                  <button
+                    key={cred.email}
+                    type="button"
+                    className="w-full text-left px-2 py-1.5 rounded hover:bg-blue-100 transition-colors mb-0.5 cursor-pointer"
+                    onClick={() => { setEmail(cred.email); setPassword(cred.pass); }}
+                  >
+                    <span className="font-semibold text-blue-800">{cred.label}:</span>{' '}
+                    <span className="text-blue-600 text-xs">{cred.email}</span>
+                  </button>
+                ))}
               </div>
+
             </form>
 
             {/* Sign Up Link */}

@@ -33,6 +33,12 @@ class CommentService:
     # ── Auth helpers ──────────────────────────────────────────────────────────
 
     async def is_project_member(self, project_id: str, user_id: str) -> bool:
+        # System-level admins bypass membership check
+        user_result = await self.db.execute(select(User).where(User.id == user_id))
+        user = user_result.scalar_one_or_none()
+        if user and getattr(user, 'role', '') in ('admin', 'super_admin', 'owner'):
+            return True
+
         result = await self.db.execute(
             select(ProjectMember).where(
                 and_(
@@ -42,6 +48,7 @@ class CommentService:
             )
         )
         return result.scalar_one_or_none() is not None
+
 
     # ── Mention parsing ───────────────────────────────────────────────────────
 

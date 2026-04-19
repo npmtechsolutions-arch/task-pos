@@ -41,9 +41,12 @@ from app.models.employee import SkillCategory, Skill, UserSkill
 from app.models.board import Board, BoardColumn, BoardSwimlane
 from app.models.milestone import Milestone
 from app.models.timesheet import Timesheet, TimesheetEntry
+from app.models.hr_hierarchy import Department, HRAssignment, HRCustomRole
+from app.models.rbac import Role, Permission, RolePermission, UserRole as RBACUserRole
 from app.models.landing import (
     LandingNavbar, LandingHero, LandingStat, LandingFeature,
     LandingTestimonial, LandingBadge, PricingTier, PricingFeature,
     FooterCategory, FooterLink, LandingAbout, LandingStep,
     LandingCTA, LandingContact, LandingLead
 )
+from app.models.document import Document, TaskFile

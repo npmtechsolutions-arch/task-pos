@@ -11,10 +11,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Adjust imports to match the backend structure
 from app.db.session import AsyncSessionLocal
 from app.models.user import User
+from app.models.tenant import Tenant, TenantStatus
 from app.models.project import Project, ProjectMember, ProjectMemberRole
+
+async def _get_or_create_tenant(db: AsyncSession) -> str:
+    """Return the ID of the first tenant, creating a default one if none exists."""
+    result = await db.execute(select(Tenant).limit(1))
+    tenant = result.scalars().first()
+    if tenant:
+        return tenant.id
+    new_tenant = Tenant(
+        id=str(uuid.uuid4()),
+        name="ProjectFlow",
+        slug="projectflow",
+        plan="enterprise",
+        status=TenantStatus.ACTIVE,
+        settings={},
+        branding={},
+        created_at=datetime.datetime.utcnow(),
+        updated_at=datetime.datetime.utcnow(),
+    )
+    db.add(new_tenant)
+    await db.flush()
+    return new_tenant.id
+
 
 async def seed_users():
     async with AsyncSessionLocal() as db:
+        # Resolve tenant first (tenant_id is NOT NULL in the users table)
+        tenant_id = await _get_or_create_tenant(db)
+
         # Check if users already exist
         u1_email = 'john@test.com'
         u2_email = 'priya@test.com'
@@ -25,6 +51,7 @@ async def seed_users():
             u1_id = str(uuid.uuid4())
             new_u1 = User(
                 id=u1_id,
+                tenant_id=tenant_id,
                 email=u1_email,
                 first_name='John',
                 last_name='Doe',
@@ -41,6 +68,7 @@ async def seed_users():
             u2_id = str(uuid.uuid4())
             new_u2 = User(
                 id=u2_id,
+                tenant_id=tenant_id,
                 email=u2_email,
                 first_name='Priya',
                 last_name='Sharma',

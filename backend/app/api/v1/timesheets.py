@@ -8,6 +8,11 @@ from sqlalchemy import select
 
 from app.api.deps import get_current_user, get_db
 from app.models.timesheet import Timesheet, TimesheetEntry, TimesheetStatus
+from pydantic import BaseModel
+from app.services.ai_agent_engine import AgenticTimesheetEngine
+
+class AgenticInput(BaseModel):
+    natural_language_input: str
 
 router = APIRouter()
 
@@ -71,3 +76,15 @@ async def approve_timesheet(
     await db.commit()
     
     return {"message": "Timesheet approved."}
+
+@router.post("/agentic-entry")
+async def parse_agentic_entry(
+    input_data: AgenticInput,
+    current_user=Depends(get_current_user)
+):
+    """Parse natural language input and return structured Agentic AI tracked data."""
+    try:
+        result = AgenticTimesheetEngine.parse_input(input_data.natural_language_input)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI Agent parsing failed: {str(e)}")
