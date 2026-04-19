@@ -133,20 +133,24 @@ def _msg_to_resp(msg: ChatMessage, user_map: dict) -> MessageResponse:
     )
 
 
+from app.services.notification import NotificationService
+from app.schemas.notification import NotificationCreate
+
 async def _create_notification(
     db: AsyncSession, user_id: str, title: str, message: str,
     ntype: str = NotificationType.TASK_MENTIONED, link_url: Optional[str] = None
 ):
-    """Create an in-app notification using the existing notifications table."""
-    n = Notification(
-        id=str(uuid.uuid4()),
-        user_id=user_id,
-        notification_type=ntype,
-        title=title,
-        message=message,
-        action_url=link_url,
+    """Create an in-app notification using the global real-time service."""
+    ns = NotificationService(db)
+    await ns.create(
+        NotificationCreate(
+            user_id=user_id,
+            notification_type=ntype,
+            title=title,
+            message=message,
+            action_url=link_url,
+        )
     )
-    db.add(n)
 
 
 # ── Room Endpoints ─────────────────────────────────────────────────────────────

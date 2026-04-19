@@ -13,6 +13,7 @@ from app.api.deps import get_current_user, get_db
 from app.core.logging import get_logger
 from app.models.user import User, UserRole
 from app.models.employee import EmployeeProfile
+from app.services.notification import NotificationService
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -130,6 +131,16 @@ async def create_user(
 
     await db.commit()
     await db.refresh(user)
+
+    # Notify all admins & owners
+    admins_res = await db.execute(select(User).where(User.role.in_([UserRole.ADMIN, UserRole.OWNER])))
+    admins = admins_res.scalars().all()
+    ns = NotificationService(db)
+    for adm in admins:
+        # Prevent self-notification if admin created the user
+        if adm.id != current_user.id:
+            await ns.notify_user_hired(adm.id, f"{data.first_name} {data.last_name}", user.id)
+
     logger.info("Admin created user", admin_id=current_user.id, new_user_id=user.id)
     return AdminUserResponse.model_validate(user)
 
@@ -189,6 +200,15 @@ async def deactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
     user.is_active = False
     await db.commit()
+
+    # Notify all admins & owners
+    admins_res = await db.execute(select(User).where(User.role.in_([UserRole.ADMIN, UserRole.OWNER])))
+    admins = admins_res.scalars().all()
+    ns = NotificationService(db)
+    for adm in admins:
+        # Prevent self-notification if admin deactivated the user
+        if adm.id != current_user.id:
+            await ns.notify_user_fired(adm.id, f"{user.first_name} {user.last_name}")
 
 
 @router.get("/stats")

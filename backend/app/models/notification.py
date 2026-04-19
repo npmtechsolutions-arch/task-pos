@@ -38,6 +38,18 @@ class NotificationType(str, PyEnum):
     SYSTEM_ANNOUNCEMENT = "system_announcement"
     SYSTEM_MAINTENANCE = "system_maintenance"
 
+    # User & General HR
+    USER_HIRED = "user_hired"
+    USER_FIRED = "user_fired"
+    MESSAGE = "message"
+
+    # Candidates & Leaves
+    CANDIDATE_SUBMITTED = "candidate_submitted"
+    CANDIDATE_APPROVED = "candidate_approved"
+    CANDIDATE_REJECTED = "candidate_rejected"
+    LEAVE_REQUESTED = "leave_requested"
+    LEAVE_APPROVED = "leave_approved"
+    LEAVE_REJECTED = "leave_rejected"
 
 class NotificationChannel(str, PyEnum):
     """Notification channel enumeration."""

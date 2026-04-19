@@ -16,7 +16,9 @@ from app.models.notification import (
 from app.schemas.notification import (
     NotificationCreate,
     NotificationPreferenceUpdate,
+    NotificationResponse,
 )
+from app.websocket.manager import manager
 
 logger = get_logger(__name__)
 
@@ -85,6 +87,16 @@ class NotificationService:
         self.db.add(notification)
         await self.db.commit()
         await self.db.refresh(notification)
+
+        # Broadcast via WebSocket immediately
+        try:
+            ws_payload = NotificationResponse.model_validate(notification).model_dump(mode="json")
+            await manager.send_to_user(
+                notification.user_id,
+                {"type": "NEW_NOTIFICATION", "data": ws_payload}
+            )
+        except Exception as e:
+            logger.error("Failed to broadcast WebSocket notification", error=str(e))
 
         # TODO: Send to external channels (email, push) via Celery
 
@@ -275,5 +287,47 @@ class NotificationService:
                 message=f"{inviter_name} invited you to join '{project_name}'",
                 project_id=project_id,
                 action_url=f"/projects/{project_id}",
+            )
+        )
+
+    async def notify_user_hired(
+        self, admin_id: str, new_user_name: str, new_user_id: str
+    ) -> Notification:
+        """Create user hired notification for admins."""
+        return await self.create(
+            NotificationCreate(
+                user_id=admin_id,
+                notification_type=NotificationType.USER_HIRED,
+                title="New Employee Joined",
+                message=f"{new_user_name} has joined the company",
+                action_url=f"/hr/employees/{new_user_id}",
+            )
+        )
+
+    async def notify_user_fired(
+        self, admin_id: str, fired_user_name: str
+    ) -> Notification:
+        """Create user fired notification for admins."""
+        return await self.create(
+            NotificationCreate(
+                user_id=admin_id,
+                notification_type=NotificationType.USER_FIRED,
+                title="Employee Removed",
+                message=f"{fired_user_name} has been deactivated",
+                action_url="/admin/users",
+            )
+        )
+
+    async def notify_message(
+        self, receiver_id: str, sender_name: str, message_preview: str, room_id: str
+    ) -> Notification:
+        """Create instant message notification."""
+        return await self.create(
+            NotificationCreate(
+                user_id=receiver_id,
+                notification_type=NotificationType.MESSAGE,
+                title="New Message",
+                message=f"{sender_name} sent you a message: {message_preview[:50]}",
+                action_url="/chat", # generic nav to chat page
             )
         )

@@ -3,7 +3,7 @@ import { Bell, Check, CheckCheck, Trash2, ExternalLink, Loader2, Volume2 } from 
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
@@ -69,11 +69,11 @@ export function NotificationBell() {
     markAllRead,
     deleteNotification,
   } = useNotificationStore();
+  const { user } = useAuthStore();
+  const { addToast } = useUIStore();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
-  const prevUnreadRef = useRef<number>(0);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Request browser notification permission on mount
   useEffect(() => { requestPermission(); }, []);
@@ -83,28 +83,48 @@ export function NotificationBell() {
     if (token) fetchNotifications(token, true);
   }, [token]);
 
-  // 30-second polling for new notifications
+  // WebSocket connection for real-time notifications
   useEffect(() => {
-    if (!token) return;
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => {
-      fetchNotifications(token, true);
-    }, POLL_INTERVAL);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [token]);
+    if (!token || !user?.id) return;
 
-  // Detect new unread notifications and trigger alert
-  useEffect(() => {
-    const prev = prevUnreadRef.current;
-    if (unreadCount > prev && prev >= 0) {
-      // New notification arrived
-      const newest = notifications.find(n => !n.is_read);
-      if (newest) {
-        triggerNotificationAlert(newest.title, newest.message);
+    // Connect to global WS (same one used for chat)
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = import.meta.env.VITE_API_URL 
+      ? new URL(import.meta.env.VITE_API_URL).host 
+      : 'localhost:8000';
+    
+    // Fallback if VITE_API_URL contains a path, just take the origin
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/${user.id}?token=${token}`;
+    
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "NEW_NOTIFICATION" && data.data) {
+          // Push to state
+          useNotificationStore.getState().pushNotification(data.data);
+          
+          // Show Toast
+          addToast({
+            type: 'info',
+            title: data.data.title,
+            message: data.data.message || 'You have a new notification',
+          });
+
+          // Trigger Vibrate/System alert
+          triggerNotificationAlert(data.data.title, data.data.message || '');
+        }
+      } catch (e) {
+        console.error("WS Message Error", e);
       }
-    }
-    prevUnreadRef.current = unreadCount;
-  }, [unreadCount]);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [token, user?.id, addToast]);
+
 
   // Fetch on open
   useEffect(() => {
