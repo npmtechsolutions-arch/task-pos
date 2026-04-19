@@ -33,6 +33,11 @@ import { HRPage } from '@/pages/hr/HRPage';
 import { KanbanPage } from '@/pages/kanban/KanbanPage';
 // PRD Upload
 import PRDUploadPage from '@/pages/documents/PRDUploadPage';
+// Attendance
+import AttendancePage from '@/pages/timesheets/AttendancePage';
+// Chat
+import ChatPage from '@/pages/chat/ChatPage';
+
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -259,6 +264,30 @@ export function AppRoutes() {
         }
       >
         <Route index element={<PRDUploadPage />} />
+      </Route>
+
+      {/* Attendance */}
+      <Route
+        path="/attendance"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<AttendancePage />} />
+      </Route>
+
+      {/* Chat */}
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ChatPage />} />
       </Route>
     </Routes>
   );

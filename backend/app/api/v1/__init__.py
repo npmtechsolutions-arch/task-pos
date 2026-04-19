@@ -27,6 +27,9 @@ from app.api.v1.employees import router as employees_router
 from app.api.v1.org_teams import router as org_teams_router
 from app.api.v1.rbac import router as rbac_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.attendance import router as attendance_router
+from app.api.v1.export import router as export_router
+from app.api.v1.chat import router as chat_router
 
 api_router = APIRouter()
 
@@ -67,3 +70,6 @@ api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(hr_router, prefix="/hr", tags=["hr"])
 api_router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])
 api_router.include_router(documents_router, prefix="/documents", tags=["documents"])
+api_router.include_router(attendance_router, prefix="/attendance", tags=["attendance"])
+api_router.include_router(export_router, prefix="/export", tags=["export"])
+api_router.include_router(chat_router, prefix="/chat", tags=["chat"])

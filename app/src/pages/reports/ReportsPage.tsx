@@ -257,6 +257,34 @@ export function ReportsPage() {
     { id: 'time',     label: '⏱ Time' },
   ] as const;
 
+  const [exporting, setExporting] = useState(false);
+  const [exportTarget, setExportTarget] = useState<'projects'|'tasks'|'users'>('projects');
+
+  const handleExport = async (fmt: 'csv' | 'json' = 'csv') => {
+    setExporting(true);
+    try {
+      const token = getToken();
+      const base = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const url = `${base}/export/${exportTarget}?fmt=${fmt}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = `${exportTarget}_report_${new Date().toISOString().slice(0,10)}.${fmt}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch (e: any) {
+      alert('Export failed: ' + e.message);
+    }
+    setExporting(false);
+  };
+
   return (
     <div className="rp-page">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -268,11 +296,23 @@ export function ReportsPage() {
           </p>
         </div>
         <div className="rp-header-actions">
+          <select
+            value={exportTarget}
+            onChange={e => setExportTarget(e.target.value as any)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 bg-white mr-2"
+          >
+            <option value="projects">Projects</option>
+            <option value="tasks">Tasks</option>
+            <option value="users">Users</option>
+          </select>
           <button className="rp-btn-ghost" onClick={() => setRefreshKey(k => k + 1)}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <button className="rp-btn-primary">
-            <Download size={14} /> Export
+          <button className="rp-btn-primary" id="btn-export-csv" onClick={() => handleExport('csv')} disabled={exporting}>
+            <Download size={14} /> {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
+          <button className="rp-btn-ghost" id="btn-export-json" onClick={() => handleExport('json')} disabled={exporting}>
+            <Download size={14} /> JSON
           </button>
         </div>
       </div>

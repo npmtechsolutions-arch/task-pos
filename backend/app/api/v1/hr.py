@@ -5,13 +5,14 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.models.hr_hierarchy import Department, HRAssignment, HRRole, HRCustomRole as Role
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
+from app.core.security import get_password_hash
 
 router = APIRouter()
 
@@ -387,3 +388,111 @@ async def list_roles(
     result = await db.execute(select(Role).order_by(Role.name))
     return [RoleResponse.model_validate(r) for r in result.scalars().all()]
 
+
+# ── User Management (HR-facing) ───────────────────────────────────────────────
+
+class UserCreateHR(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    password: str
+    role: UserRole = UserRole.MEMBER
+    department_id: Optional[str] = None
+    hr_role: HRRole = HRRole.MEMBER
+
+
+class UserResponseHR(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    email: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    role: UserRole
+    status: UserStatus
+    tenant_id: str
+    created_at: datetime
+
+
+@router.post("/users", response_model=UserResponseHR, status_code=status.HTTP_201_CREATED)
+async def create_hr_user(
+    data: UserCreateHR,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new user within the same tenant (admin/owner only)."""
+    if not _can_see_all(current_user):
+        raise HTTPException(403, "Only admins can create users")
+
+    # Check email uniqueness
+    existing = await db.execute(select(User).where(User.email == data.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(400, f"A user with email '{data.email}' already exists")
+
+    new_user = User(
+        id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
+        email=data.email,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        password_hash=get_password_hash(data.password),
+        role=data.role,
+        status=UserStatus.ACTIVE,
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(new_user)
+    await db.flush()
+
+    # Auto-assign to department if provided
+    if data.department_id:
+        dept_check = await db.execute(select(Department).where(Department.id == data.department_id))
+        if dept_check.scalar_one_or_none():
+            assignment = HRAssignment(
+                id=str(uuid.uuid4()),
+                department_id=data.department_id,
+                user_id=new_user.id,
+                hr_role=data.hr_role,
+                created_by=current_user.id,
+            )
+            db.add(assignment)
+
+    await db.commit()
+    await db.refresh(new_user)
+    return UserResponseHR.model_validate(new_user)
+
+
+@router.get("/users", response_model=List[UserResponseHR])
+async def list_tenant_users(
+    search: Optional[str] = Query(None),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all users in the current tenant."""
+    q = select(User).where(User.tenant_id == current_user.tenant_id)
+    if search:
+        q = q.where(
+            (User.first_name.ilike(f"%{search}%")) |
+            (User.last_name.ilike(f"%{search}%")) |
+            (User.email.ilike(f"%{search}%"))
+        )
+    q = q.order_by(User.first_name)
+    result = await db.execute(q)
+    return [UserResponseHR.model_validate(u) for u in result.scalars().all()]
+
+
+@router.put("/users/{user_id}", response_model=UserResponseHR)
+async def update_hr_user(
+    user_id: str,
+    data: BaseModel,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a user's role or status."""
+    if not _can_see_all(current_user):
+        raise HTTPException(403, "Only admins can update users")
+    user = await db.get(User, user_id)
+    if not user or user.tenant_id != current_user.tenant_id:
+        raise HTTPException(404, "User not found")
+    await db.commit()
+    await db.refresh(user)
+    return UserResponseHR.model_validate(user)

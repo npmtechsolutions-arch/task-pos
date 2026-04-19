@@ -151,10 +151,9 @@ class ProjectService:
         self.db.add(project)
         await self.db.flush()  # Flush to get project ID
 
-        # Add owner as project admin (with tenant_id)
+        # Add owner as project admin
         owner_member = ProjectMember(
             project_id=project.id,
-            tenant_id=tenant_id,
             user_id=owner_id,
             role=ProjectMemberRole.ADMIN,
         )

@@ -16,7 +16,10 @@ import {
   ShieldCheck,
   Kanban,
   FileText,
+  ClipboardList,
+  MessageCircle,
 } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUIStore, useProjectStore } from '@/stores';
 import { Button } from '@/components/ui/button';
@@ -41,12 +44,15 @@ const mainNavigation = [
   { name: 'Dashboard',  href: '/dashboard',  icon: LayoutDashboard },
   { name: 'Projects',   href: '/projects',   icon: FolderKanban },
   { name: 'My Tasks',   href: '/tasks',      icon: CheckSquare },
+  { name: 'Chat',       href: '/chat',       icon: MessageCircle },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
-  { name: 'PRD Upload', href: '/prd-upload', icon: FileText },
+  { name: 'Attendance', href: '/attendance', icon: ClipboardList },
+  { name: 'PR Upload',  href: '/prd-upload', icon: FileText },
   { name: 'HR & Org',   href: '/hr',         icon: Users },
   { name: 'Calendar',   href: '/calendar',   icon: Calendar },
   { name: 'Reports',    href: '/reports',    icon: BarChart3 },
 ];
+
 
 const adminNavigation = [
   { name: 'Super Admin',   href: '/admin/super',    icon: ShieldCheck },

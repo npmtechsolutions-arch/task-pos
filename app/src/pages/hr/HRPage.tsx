@@ -1,182 +1,243 @@
-import { useState, useEffect } from 'react';
-import {
-  Users, Plus, Building2, ChevronRight, ChevronDown, Loader2, X,
-  ShieldCheck, UserCheck, UserCog, User, Trash2, RefreshCw
-} from 'lucide-react';
+/**
+ * HRPage — Complete HR & Organisation management
+ * Features: User list, Create user, Edit role/dept, Deactivate, Department management
+ */
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import {
+  Users, Plus, Search, RefreshCw, Building2, UserCheck, UserX,
+  Edit3, Trash2, X, Loader2, ChevronDown, Shield, Mail,
+  Phone, Calendar, Star, AlertCircle, Check, Eye, EyeOff,
+  Download, Filter, MoreVertical, UserPlus
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-const authHeader = () => {
-  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const auth = () => {
+  const t = localStorage.getItem('token') || localStorage.getItem('access_token');
+  return t ? { Authorization: `Bearer ${t}` } : {};
 };
-
 const storedUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
-const isAdminOrCEO = () => ['admin', 'owner', 'ceo'].includes(storedUser()?.role ?? '');
+const isAdmin = () => ['admin', 'owner'].includes(storedUser()?.role);
 
-type HRRole = 'manager' | 'hr' | 'team_leader' | 'member';
-const ROLE_LABEL: Record<HRRole, string> = {
-  manager: 'Manager', hr: 'HR Officer', team_leader: 'Team Leader', member: 'Member',
-};
-const ROLE_ICON: Record<HRRole, React.ReactNode> = {
-  manager: <ShieldCheck className="w-4 h-4 text-purple-600" />,
-  hr: <UserCog className="w-4 h-4 text-blue-600" />,
-  team_leader: <UserCheck className="w-4 h-4 text-emerald-600" />,
-  member: <User className="w-4 h-4 text-gray-500" />,
-};
-const ROLE_COLORS: Record<HRRole, string> = {
-  manager: 'bg-purple-100 text-purple-700',
-  hr: 'bg-blue-100 text-blue-700',
-  team_leader: 'bg-emerald-100 text-emerald-700',
-  member: 'bg-gray-100 text-gray-600',
-};
-
-interface Department { id: string; name: string; description?: string; manager_id?: string; }
-interface Member {
-  id: string; user_id: string; hr_role: HRRole;
-  first_name?: string; last_name?: string; email?: string; reports_to_id?: string;
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface TenantUser {
+  id: string; email: string; first_name?: string; last_name?: string;
+  role: string; status?: string; is_active: boolean;
+  created_at?: string; title?: string; department?: string | null;
+}
+interface Department {
+  id: string; name: string; description?: string; head_id?: string;
+  member_count?: number;
 }
 
-// ── Add Member Modal ──────────────────────────────────────────────────────────
-function AddMemberModal({ dept, onClose, onAdded, actorRole }: {
-  dept: Department;
+const ROLE_COLORS: Record<string, string> = {
+  owner:   'bg-purple-100 text-purple-700 border-purple-200',
+  admin:   'bg-red-100 text-red-700 border-red-200',
+  manager: 'bg-orange-100 text-orange-700 border-orange-200',
+  member:  'bg-blue-100 text-blue-700 border-blue-200',
+  viewer:  'bg-gray-100 text-gray-600 border-gray-200',
+};
+const STATUS_COLORS: Record<string, string> = {
+  active:    'bg-emerald-100 text-emerald-700',
+  inactive:  'bg-gray-100 text-gray-500',
+  suspended: 'bg-red-100 text-red-600',
+  pending:   'bg-yellow-100 text-yellow-700',
+};
+
+// ── Create / Edit User Modal ──────────────────────────────────────────────────
+function UserModal({
+  user, departments, onClose, onSaved
+}: {
+  user?: TenantUser | null;
+  departments: Department[];
   onClose: () => void;
-  onAdded: (m: Member) => void;
-  actorRole: HRRole | null;
+  onSaved: (u: TenantUser) => void;
 }) {
-  const ROLE_CAN_ADD: Record<HRRole, HRRole> = {
-    manager: 'hr', hr: 'team_leader', team_leader: 'member', member: 'member',
-  };
-  const allowedRole: HRRole = actorRole ? ROLE_CAN_ADD[actorRole] : 'member';
-  const [search, setSearch] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [role, setRole] = useState<HRRole>(isAdminOrCEO() ? 'member' : allowedRole);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const isEdit = !!user;
+  const [form, setForm] = useState({
+    first_name: user?.first_name || '',
+    last_name:  user?.last_name  || '',
+    email:      user?.email      || '',
+    password:   '',
+    role:       user?.role       || 'member',
+    title:      user?.title      || '',
+    department: user?.department || '',
+  });
+  const [showPwd, setShowPwd] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
 
-  const searchUsers = async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); return; }
-    try {
-      const res = await axios.get(`${API_URL}/users?search=${encodeURIComponent(q)}&per_page=10`, { headers: authHeader() });
-      setSearchResults(res.data?.items || res.data || []);
-    } catch { setSearchResults([]); }
-  };
+  const set = (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm(p => ({ ...p, [k]: e.target.value }));
 
-  const handleAdd = async () => {
-    if (!selectedUser) { setError('Select a user first'); return; }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.email)      { setError('Email is required'); return; }
+    if (!isEdit && !form.password) { setError('Password is required for new users'); return; }
     setSaving(true); setError('');
     try {
-      const res = await axios.post(`${API_URL}/hr/departments/${dept.id}/members`, {
-        user_id: selectedUser.id, hr_role: role,
-      }, { headers: authHeader() });
-      onAdded({ id: res.data.id, user_id: selectedUser.id, hr_role: role,
-        first_name: selectedUser.first_name, last_name: selectedUser.last_name, email: selectedUser.email });
-      onClose();
-    } catch (e: any) {
-      setError(e.response?.data?.detail ?? e.message ?? 'Failed to add member');
-    } finally { setSaving(false); }
-  };
+      const payload: any = {
+        first_name: form.first_name || undefined,
+        last_name:  form.last_name  || undefined,
+        email:      form.email,
+        role:       form.role,
+        title:      form.title      || undefined,
+        department: form.department || undefined,
+      };
+      if (!isEdit) payload.password = form.password;
 
-  const AVAILABLE_ROLES: HRRole[] = isAdminOrCEO()
-    ? ['manager', 'hr', 'team_leader', 'member']
-    : [allowedRole];
+      let res;
+      if (isEdit) {
+        res = await axios.patch(`${API}/admin/users/${user!.id}`, payload, { headers: auth() });
+      } else {
+        res = await axios.post(`${API}/hr/users`, { ...payload, password: form.password }, { headers: auth() });
+      }
+      onSaved(res.data);
+    } catch (e: any) { setError(e.response?.data?.detail ?? e.message ?? 'Operation failed'); }
+    setSaving(false);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white">Add Member to {dept.name}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-indigo-500" />
+            {isEdit ? 'Edit User' : 'Add New User'}
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <div className="p-6 space-y-4">
-          {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{error}</div>}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-xl p-3">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">First Name</label>
+              <input autoFocus value={form.first_name} onChange={set('first_name')} placeholder="John"
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Last Name</label>
+              <input value={form.last_name} onChange={set('last_name')} placeholder="Doe"
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Search User</label>
-            <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              placeholder="Name or email…" value={search}
-              onChange={e => { setSearch(e.target.value); searchUsers(e.target.value); setSelectedUser(null); }} />
-            {searchResults.length > 0 && !selectedUser && (
-              <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden shadow-sm max-h-40 overflow-y-auto">
-                {searchResults.map(u => (
-                  <button key={u.id} type="button"
-                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-indigo-50 text-left"
-                    onClick={() => { setSelectedUser(u); setSearch(`${u.first_name} ${u.last_name} (${u.email})`); setSearchResults([]); }}>
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                      {u.first_name?.[0] ?? '?'}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{u.first_name} {u.last_name}</p>
-                      <p className="text-xs text-gray-400">{u.email}</p>
-                    </div>
-                  </button>
-                ))}
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Email *</label>
+            <input type="email" value={form.email} onChange={set('email')} placeholder="john@company.com" required
+              className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white" />
+          </div>
+          {!isEdit && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Password *</label>
+              <div className="relative">
+                <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                  placeholder="Min 8 characters" required
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white" />
+                <button type="button" onClick={() => setShowPwd(!showPwd)}
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-            )}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Role</label>
+              <select value={form.role} onChange={set('role')}
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white">
+                <option value="member">Member</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Department</label>
+              <select value={form.department} onChange={set('department')}
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white">
+                <option value="">No Department</option>
+                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </select>
+            </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">HR Role</label>
-            <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              value={role} onChange={e => setRole(e.target.value as HRRole)}>
-              {AVAILABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-            </select>
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Job Title</label>
+            <input value={form.title} onChange={set('title')} placeholder="e.g. Senior Developer"
+              className="w-full border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white" />
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button type="button" onClick={handleAdd} disabled={!selectedUser || saving}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Add Member
+              className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" id="btn-save-user" disabled={saving}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 text-sm font-semibold
+                         disabled:opacity-60 flex items-center justify-center gap-2 transition-colors">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {isEdit ? 'Save Changes' : 'Create User'}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
 }
 
-// ── Create Department Modal ───────────────────────────────────────────────────
-function CreateDeptModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Department) => void }) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+// ── Department Modal ───────────────────────────────────────────────────────────
+function DepartmentModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Department) => void }) {
+  const [name, setName]   = useState('');
+  const [desc, setDesc]   = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]  = useState('');
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) { setError('Name required'); return; }
+    if (!name.trim()) { setError('Department name is required'); return; }
     setSaving(true); setError('');
     try {
-      const res = await axios.post(`${API_URL}/hr/departments`, { name, description }, { headers: authHeader() });
-      onCreated(res.data); onClose();
+      const res = await axios.post(`${API}/hr/departments`, { name, description: desc || undefined }, { headers: auth() });
+      onCreated(res.data);
     } catch (e: any) { setError(e.response?.data?.detail ?? e.message); }
-    finally { setSaving(false); }
+    setSaving(false);
   };
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white">New Department</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-emerald-500" /> New Department
+          </h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleCreate} className="p-6 space-y-4">
-          {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{error}</div>}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <div className="text-sm text-red-600 bg-red-50 rounded-xl p-3">{error}</div>}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-            <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              value={name} onChange={e => setName(e.target.value)} placeholder="Engineering, Marketing…" required />
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Name *</label>
+            <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Engineering, Marketing…"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              value={description} onChange={e => setDescription(e.target.value)} />
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Description</label>
+            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Optional description"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose}
-              className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+              className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
             <button type="submit" disabled={saving}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl py-2.5 text-sm font-semibold
+                         disabled:opacity-60 flex items-center justify-center gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Create
             </button>
           </div>
@@ -186,205 +247,309 @@ function CreateDeptModal({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
-// ── Department Card ───────────────────────────────────────────────────────────
-function DeptCard({ dept, currentUserRole }: { dept: Department; currentUserRole: HRRole | null }) {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [removing, setRemoving] = useState<string | null>(null);
-
-  useEffect(() => {
-    axios.get(`${API_URL}/hr/departments/${dept.id}/members`, { headers: authHeader() })
-      .then(r => setMembers(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [dept.id]);
-
-  const handleRemove = async (userId: string) => {
-    if (!window.confirm('Remove this member?')) return;
-    setRemoving(userId);
-    try {
-      await axios.delete(`${API_URL}/hr/departments/${dept.id}/members/${userId}`, { headers: authHeader() });
-      setMembers(prev => prev.filter(m => m.user_id !== userId));
-    } catch (e: any) { alert(e.response?.data?.detail ?? 'Remove failed'); }
-    finally { setRemoving(null); }
-  };
-
-  const canAddMember = isAdminOrCEO() || (['manager', 'hr', 'team_leader'] as HRRole[]).includes(currentUserRole!);
-
-  const grouped: Record<HRRole, Member[]> = { manager: [], hr: [], team_leader: [], member: [] };
-  for (const m of members) { if (grouped[m.hr_role]) grouped[m.hr_role].push(m); }
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-      {showAddModal && (
-        <AddMemberModal dept={dept} actorRole={currentUserRole}
-          onClose={() => setShowAddModal(false)}
-          onAdded={m => setMembers(prev => [...prev, m])} />
-      )}
-      <button onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 transition-colors">
-        <Building2 className="w-5 h-5 text-indigo-500 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-gray-800 dark:text-white">{dept.name}</h3>
-          {dept.description && <p className="text-xs text-gray-500 truncate">{dept.description}</p>}
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">{members.length} members</span>
-          {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="px-6 pb-5 pt-2 border-t border-gray-50">
-          {loading ? (
-            <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-indigo-400" /></div>
-          ) : (
-            <>
-              {/* Hierarchy lanes */}
-              {(['manager', 'hr', 'team_leader', 'member'] as HRRole[]).map(lane => {
-                const laneMembers = grouped[lane];
-                if (laneMembers.length === 0) return null;
-                return (
-                  <div key={lane} className="mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      {ROLE_ICON[lane]}
-                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{ROLE_LABEL[lane]}s</span>
-                      <span className="text-xs text-gray-400">({laneMembers.length})</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 ml-6">
-                      {laneMembers.map(m => (
-                        <div key={m.user_id} className="flex items-center gap-2 p-2.5 rounded-xl bg-gray-50 border border-gray-100 group">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                            {(m.first_name?.[0] ?? m.email?.[0] ?? '?').toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium text-gray-800 truncate">{m.first_name} {m.last_name}</p>
-                            <p className="text-[10px] text-gray-400 truncate">{m.email}</p>
-                          </div>
-                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${ROLE_COLORS[m.hr_role]}`}>
-                            {ROLE_LABEL[m.hr_role]}
-                          </span>
-                          {(isAdminOrCEO() || (currentUserRole && ['manager','hr','team_leader'].includes(currentUserRole))) && (
-                            removing === m.user_id
-                              ? <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin flex-shrink-0" />
-                              : <button onClick={() => handleRemove(m.user_id)}
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 p-0.5 flex-shrink-0">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {canAddMember && (
-                <button onClick={() => setShowAddModal(true)}
-                  className="w-full mt-2 border-2 border-dashed border-gray-200 hover:border-indigo-300 rounded-xl py-2.5 text-sm text-gray-400 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1.5">
-                  <Plus className="w-4 h-4" /> Add Member
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Main HR Page ───────────────────────────────────────────────────────────────
 export function HRPage() {
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const currentUser = storedUser();
-  const canManage = isAdminOrCEO() || currentUser?.role === 'manager';
+  const [users, setUsers]         = useState<TenantUser[]>([]);
+  const [departments, setDepts]   = useState<Department[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [roleFilter, setRole]     = useState('all');
+  const [tab, setTab]             = useState<'users' | 'departments'>('users');
+  const [showUserModal, setShowUserModal]   = useState(false);
+  const [showDeptModal, setShowDeptModal]   = useState(false);
+  const [editingUser, setEditingUser]       = useState<TenantUser | null>(null);
+  const canManage = isAdmin();
 
-  const loadData = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [deptsRes, statsRes] = await Promise.all([
-        axios.get(`${API_URL}/hr/departments`, { headers: authHeader() }),
-        isAdminOrCEO() ? axios.get(`${API_URL}/hr/stats`, { headers: authHeader() }).catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+      const [ur, dr] = await Promise.all([
+        axios.get(`${API}/hr/users`, { headers: auth() }),
+        axios.get(`${API}/hr/departments`, { headers: auth() }).catch(() => ({ data: [] })),
       ]);
-      setDepartments(deptsRes.data);
-      setStats(statsRes.data);
-    } catch (e) { console.error('HR load error:', e); }
-    finally { setLoading(false); }
+      setUsers(ur.data || []);
+      setDepts(dr.data || []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, []);
+
+  const deactivateUser = async (uid: string) => {
+    if (!confirm('Deactivate this user? They will lose system access.')) return;
+    try {
+      await axios.patch(`${API}/admin/users/${uid}`, { is_active: false }, { headers: auth() });
+      setUsers(prev => prev.map(u => u.id === uid ? { ...u, is_active: false } : u));
+    } catch (e: any) { alert(e.response?.data?.detail ?? 'Failed'); }
   };
 
-  useEffect(() => { loadData(); }, []);
+  const activateUser = async (uid: string) => {
+    try {
+      await axios.patch(`${API}/admin/users/${uid}`, { is_active: true }, { headers: auth() });
+      setUsers(prev => prev.map(u => u.id === uid ? { ...u, is_active: true } : u));
+    } catch (e: any) { alert(e.response?.data?.detail ?? 'Failed'); }
+  };
+
+  const filtered = users.filter(u => {
+    const q = search.toLowerCase();
+    const name = `${u.first_name || ''} ${u.last_name || ''} ${u.email}`.toLowerCase();
+    const matchSearch = !q || name.includes(q);
+    const matchRole   = roleFilter === 'all' || u.role === roleFilter;
+    return matchSearch && matchRole;
+  });
+
+  const stats = {
+    total:    users.length,
+    active:   users.filter(u => u.is_active).length,
+    admins:   users.filter(u => ['admin','owner'].includes(u.role)).length,
+    managers: users.filter(u => u.role === 'manager').length,
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      {showCreate && (
-        <CreateDeptModal
-          onClose={() => setShowCreate(false)}
-          onCreated={d => setDepartments(prev => [...prev, d])} />
+      {/* Modals */}
+      {(showUserModal || editingUser) && (
+        <UserModal
+          user={editingUser}
+          departments={departments}
+          onClose={() => { setShowUserModal(false); setEditingUser(null); }}
+          onSaved={u => {
+            setUsers(prev => editingUser
+              ? prev.map(x => x.id === u.id ? u : x)
+              : [...prev, u]
+            );
+            setShowUserModal(false); setEditingUser(null);
+          }}
+        />
+      )}
+      {showDeptModal && (
+        <DepartmentModal
+          onClose={() => setShowDeptModal(false)}
+          onCreated={d => { setDepts(prev => [...prev, d]); setShowDeptModal(false); }}
+        />
       )}
 
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Users className="w-7 h-7 text-indigo-600" /> HR & Organisation
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">Department hierarchy and personnel</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">HR & Organisation</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Manage team members, roles, and departments</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={loadData} className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">
+          <div className="flex items-center gap-2.5">
+            <button onClick={load}
+              className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 transition-colors">
               <RefreshCw className="w-4 h-4" /> Refresh
             </button>
-            {canManage && (
-              <button onClick={() => setShowCreate(true)}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold">
+            {canManage && tab === 'departments' && (
+              <button id="btn-new-dept" onClick={() => setShowDeptModal(true)}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
                 <Plus className="w-4 h-4" /> New Department
+              </button>
+            )}
+            {canManage && tab === 'users' && (
+              <button id="btn-add-user" onClick={() => setShowUserModal(true)}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+                <UserPlus className="w-4 h-4" /> Add User
               </button>
             )}
           </div>
         </div>
 
-        {/* Stats */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {[
-              { label: 'Departments', value: stats.total_departments, color: 'text-indigo-600' },
-              { label: 'Total Staff', value: stats.total_members, color: 'text-gray-800' },
-              { label: 'Managers', value: stats.by_role?.manager ?? 0, color: 'text-purple-600' },
-              { label: 'Team Leaders', value: stats.by_role?.team_leader ?? 0, color: 'text-emerald-600' },
-            ].map(s => (
-              <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-4">
-                <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+        {/* Stat Cards */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {[
+            { label: 'Total Users',   value: stats.total,    color: 'from-indigo-500 to-blue-600',    icon: Users },
+            { label: 'Active',        value: stats.active,   color: 'from-emerald-500 to-teal-600',   icon: UserCheck },
+            { label: 'Admins',        value: stats.admins,   color: 'from-red-500 to-rose-600',       icon: Shield },
+            { label: 'Managers',      value: stats.managers, color: 'from-orange-500 to-amber-600',   icon: Star },
+          ].map(s => (
+            <div key={s.label} className={`bg-gradient-to-br ${s.color} rounded-2xl p-4 text-white shadow-md`}>
+              <s.icon className="w-5 h-5 opacity-80 mb-2" />
+              <div className="text-2xl font-bold">{loading ? '—' : s.value}</div>
+              <div className="text-xs opacity-80 mt-0.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 w-fit">
+          {(['users', 'departments'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={cn('px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize',
+                tab === t ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700')}>
+              {t === 'users' ? `Users (${users.length})` : `Departments (${departments.length})`}
+            </button>
+          ))}
+        </div>
+
+        {/* Users Tab */}
+        {tab === 'users' && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+            {/* Filters */}
+            <div className="flex items-center gap-3 p-4 border-b border-gray-100 dark:border-gray-700">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                <input value={search} onChange={e => setSearch(e.target.value)}
+                  placeholder="Search by name or email…"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-gray-700 dark:text-white" />
               </div>
-            ))}
+              <select value={roleFilter} onChange={e => setRole(e.target.value)}
+                className="border border-gray-200 dark:border-gray-600 rounded-xl px-3 py-2 text-sm dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="all">All Roles</option>
+                <option value="owner">Owner</option>
+                <option value="admin">Admin</option>
+                <option value="manager">Manager</option>
+                <option value="member">Member</option>
+                <option value="viewer">Viewer</option>
+              </select>
+              <span className="text-sm text-gray-500">{filtered.length} of {users.length}</span>
+            </div>
+
+            {/* User Table */}
+            {loading ? (
+              <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-indigo-400" /></div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p className="font-medium">No users found</p>
+                {canManage && <button onClick={() => setShowUserModal(true)}
+                  className="mt-2 text-indigo-600 text-sm hover:underline">+ Add the first user</button>}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100 dark:border-gray-700">
+                      <th className="text-left px-4 py-3 font-semibold">User</th>
+                      <th className="text-left px-4 py-3 font-semibold">Role</th>
+                      <th className="text-left px-4 py-3 font-semibold">Department</th>
+                      <th className="text-left px-4 py-3 font-semibold">Status</th>
+                      <th className="text-left px-4 py-3 font-semibold">Joined</th>
+                      {canManage && <th className="text-right px-4 py-3 font-semibold">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+                    {filtered.map(u => {
+                      const name = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
+                      const initials = (u.first_name?.[0] || u.email[0]).toUpperCase() + (u.last_name?.[0] || '').toUpperCase();
+                      return (
+                        <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                {initials}
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-800 dark:text-white text-sm">{name}</p>
+                                <p className="text-xs text-gray-400">{u.email}</p>
+                                {u.title && <p className="text-xs text-gray-500 italic">{u.title}</p>}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn('text-xs px-2.5 py-1 rounded-full font-medium border capitalize', ROLE_COLORS[u.role] || ROLE_COLORS.member)}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                            {u.department || <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn('text-xs px-2.5 py-1 rounded-full font-medium capitalize',
+                              u.is_active ? STATUS_COLORS.active : STATUS_COLORS.inactive)}>
+                              {u.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-400">
+                            {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                          </td>
+                          {canManage && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button onClick={() => setEditingUser(u)}
+                                  className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-500 transition-colors" title="Edit">
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                {u.is_active ? (
+                                  <button onClick={() => deactivateUser(u.id)}
+                                    className="p-1.5 hover:bg-red-50 rounded-lg text-red-400 transition-colors" title="Deactivate">
+                                    <UserX className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button onClick={() => activateUser(u.id)}
+                                    className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-500 transition-colors" title="Activate">
+                                    <UserCheck className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Hierarchy rules note */}
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6 text-sm text-indigo-700">
-          <strong>Hierarchy:</strong> Manager → can add HR Officers · HR Officers → can add Team Leaders · Team Leaders → can add Members · CEO/Admin → can add anyone
-        </div>
-
-        {/* Departments */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
-          </div>
-        ) : departments.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <Building2 className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p className="font-medium">No departments yet</p>
-            {canManage && <button onClick={() => setShowCreate(true)} className="mt-3 text-indigo-600 hover:underline text-sm">+ Create first department</button>}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {departments.map(dept => (
-              <DeptCard key={dept.id} dept={dept} currentUserRole={null} />
-            ))}
+        {/* Departments Tab */}
+        {tab === 'departments' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loading ? (
+              <div className="col-span-3 flex justify-center py-16">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+              </div>
+            ) : departments.length === 0 ? (
+              <div className="col-span-3 text-center py-16 text-gray-400">
+                <Building2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p className="font-medium">No departments yet</p>
+                {canManage && <button onClick={() => setShowDeptModal(true)}
+                  className="mt-2 text-emerald-600 text-sm hover:underline">+ Create first department</button>}
+              </div>
+            ) : departments.map(d => {
+              const deptUsers = users.filter(u => u.department === d.name);
+              return (
+                <div key={d.id}
+                  className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
+                      {deptUsers.length} member{deptUsers.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-gray-800 dark:text-white">{d.name}</h3>
+                  {d.description && <p className="text-xs text-gray-500 mt-1">{d.description}</p>}
+                  {deptUsers.length > 0 && (
+                    <div className="mt-3 flex -space-x-2">
+                      {deptUsers.slice(0, 5).map(u => (
+                        <div key={u.id}
+                          className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold"
+                          title={`${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email}>
+                          {(u.first_name?.[0] || u.email[0]).toUpperCase()}
+                        </div>
+                      ))}
+                      {deptUsers.length > 5 && (
+                        <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-gray-600 text-xs font-bold">
+                          +{deptUsers.length - 5}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {canManage && (
+              <button onClick={() => setShowDeptModal(true)}
+                className="border-2 border-dashed border-gray-200 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-emerald-400 hover:text-emerald-500 transition-colors min-h-[140px]">
+                <Plus className="w-8 h-8" />
+                <span className="text-sm font-medium">Add Department</span>
+              </button>
+            )}
           </div>
         )}
       </div>
