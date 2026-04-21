@@ -20,6 +20,8 @@ class NotificationCreate(NotificationBase):
     """Notification creation schema."""
 
     user_id: str
+    tenant_id: Optional[str] = None
+    dedupe_key: Optional[str] = None
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     comment_id: Optional[str] = None
@@ -35,6 +37,8 @@ class NotificationResponse(NotificationBase):
 
     id: str
     user_id: str
+    tenant_id: Optional[str] = None
+    dedupe_key: Optional[str] = None
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     comment_id: Optional[str] = None

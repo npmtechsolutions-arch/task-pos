@@ -32,6 +32,7 @@ async def list_notifications(
     notification_service = NotificationService(db)
     notifications, total, unread_count = await notification_service.list_notifications(
         user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         unread_only=unread_only,
         page=page,
         per_page=per_page,
@@ -55,6 +56,7 @@ async def get_unread_count(
     notification_service = NotificationService(db)
     _, _, unread_count = await notification_service.list_notifications(
         user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         unread_only=True,
         page=1,
         per_page=1,

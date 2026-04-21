@@ -13,6 +13,7 @@ from app.models.notification import (
     NotificationPreference,
     NotificationType,
 )
+from app.models.user import User
 from app.schemas.notification import (
     NotificationCreate,
     NotificationPreferenceUpdate,
@@ -39,12 +40,15 @@ class NotificationService:
     async def list_notifications(
         self,
         user_id: str,
+        tenant_id: Optional[str] = None,
         unread_only: bool = False,
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[List[Notification], int, int]:
         """List notifications for user."""
         query = select(Notification).where(Notification.user_id == user_id)
+        if tenant_id:
+            query = query.where(Notification.tenant_id == tenant_id)
 
         if unread_only:
             query = query.where(Notification.is_read == False)
@@ -52,13 +56,17 @@ class NotificationService:
         # Get unread count
         unread_query = select(func.count()).where(
             Notification.user_id == user_id,
+            *( [Notification.tenant_id == tenant_id] if tenant_id else [] ),
             Notification.is_read == False,
         )
         unread_result = await self.db.execute(unread_query)
         unread_count = unread_result.scalar() or 0
 
         # Get total count
-        total_query = select(func.count()).where(Notification.user_id == user_id)
+        total_query = select(func.count()).where(
+            Notification.user_id == user_id,
+            *( [Notification.tenant_id == tenant_id] if tenant_id else [] ),
+        )
         total_result = await self.db.execute(total_query)
         total = total_result.scalar() or 0
 
@@ -71,8 +79,29 @@ class NotificationService:
 
     async def create(self, notification_data: NotificationCreate) -> Notification:
         """Create a new notification."""
+        # Resolve tenant_id if missing (never trust callers to set it correctly)
+        tenant_id = notification_data.tenant_id
+        if not tenant_id:
+            res = await self.db.execute(select(User.tenant_id).where(User.id == notification_data.user_id))
+            tenant_id = res.scalar_one_or_none()
+            if not tenant_id:
+                raise ValueError("Invalid user_id for notification")
+
+        # Idempotency: if dedupe_key is provided, return existing notification
+        if notification_data.dedupe_key:
+            existing = await self.db.execute(
+                select(Notification).where(
+                    Notification.user_id == notification_data.user_id,
+                    Notification.dedupe_key == notification_data.dedupe_key,
+                )
+            )
+            found = existing.scalar_one_or_none()
+            if found:
+                return found
+
         notification = Notification(
             user_id=notification_data.user_id,
+            tenant_id=tenant_id,
             notification_type=notification_data.notification_type,
             title=notification_data.title,
             message=notification_data.message,
@@ -80,6 +109,7 @@ class NotificationService:
             task_id=notification_data.task_id,
             comment_id=notification_data.comment_id,
             metadata=notification_data.metadata or {},
+            dedupe_key=notification_data.dedupe_key,
             channels=[ch.value for ch in notification_data.channels],
             action_url=notification_data.action_url,
         )
@@ -219,6 +249,7 @@ class NotificationService:
         return await self.create(
             NotificationCreate(
                 user_id=user_id,
+                dedupe_key=f"task_assigned:{task_id}:{user_id}",
                 notification_type=NotificationType.TASK_ASSIGNED,
                 title="New task assigned",
                 message=f"{assigned_by_name} assigned you to '{task_title}' in {project_name}",
@@ -241,6 +272,7 @@ class NotificationService:
         return await self.create(
             NotificationCreate(
                 user_id=user_id,
+                dedupe_key=f"task_commented:{task_id}:{user_id}:{commenter_name}",
                 notification_type=NotificationType.TASK_COMMENTED,
                 title="New comment on task",
                 message=f"{commenter_name} commented on '{task_title}': {comment_preview[:100]}",
@@ -262,6 +294,7 @@ class NotificationService:
         return await self.create(
             NotificationCreate(
                 user_id=user_id,
+                dedupe_key=f"task_due_soon:{task_id}:{user_id}:{hours_remaining}",
                 notification_type=NotificationType.TASK_DUE_SOON,
                 title="Task due soon",
                 message=f"'{task_title}' is due in {hours_remaining} hours",
@@ -282,6 +315,7 @@ class NotificationService:
         return await self.create(
             NotificationCreate(
                 user_id=user_id,
+                dedupe_key=f"project_invitation:{project_id}:{user_id}",
                 notification_type=NotificationType.PROJECT_INVITATION,
                 title="Project invitation",
                 message=f"{inviter_name} invited you to join '{project_name}'",

@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -64,6 +64,9 @@ class Notification(Base):
     """Notification model."""
 
     __tablename__ = "notifications"
+    __table_args__ = (
+        UniqueConstraint("user_id", "dedupe_key", name="uq_notifications_user_dedupe_key"),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36),
@@ -78,6 +81,13 @@ class Notification(Base):
         index=True,
     )
     user: Mapped["User"] = relationship("User", lazy="selectin")
+
+    tenant_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     notification_type: Mapped[NotificationType] = mapped_column(nullable=False)
 
@@ -101,6 +111,9 @@ class Notification(Base):
 
     # Additional data
     extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+
+    # Idempotency / de-dupe for at-least-once delivery paths
+    dedupe_key: Mapped[Optional[str]] = mapped_column(String(255), index=True)
 
     # Channels delivered
     channels: Mapped[list] = mapped_column(
