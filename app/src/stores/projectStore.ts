@@ -50,6 +50,10 @@ function mapApiProject(p: ApiProject): Project {
     department: p.department,
     businessUnit: p.business_unit,
     clientName: p.client_name,
+    githubUrl: p.github_url ?? undefined,
+    prdFile: p.prd_file
+      ? { id: p.prd_file.id, fileName: p.prd_file.file_name, version: p.prd_file.version }
+      : undefined,
     objectives: Array.isArray(p.objectives) ? p.objectives : [],
     keyResults: Array.isArray(p.key_results) ? p.key_results : [],
     successCriteria: Array.isArray(p.success_criteria) ? p.success_criteria : [],
@@ -96,7 +100,7 @@ interface ProjectState {
   // Actions
   fetchProjects: () => Promise<void>;
   fetchProjectById: (id: string) => Promise<void>;
-  createProject: (data: ProjectCreatePayload) => Promise<Project | null>;
+  createProject: (data: ProjectCreatePayload | FormData) => Promise<Project | null>;
   updateProjectApi: (id: string, data: ProjectUpdatePayload) => Promise<Project | null>;
   archiveProjectApi: (id: string) => Promise<boolean>;
   transitionStatus: (id: string, status: string) => Promise<Project | null>;
@@ -175,7 +179,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   // ── Create project (calls real API) ────────────────────────────────────
-  createProject: async (data: ProjectCreatePayload) => {
+  createProject: async (data: ProjectCreatePayload | FormData) => {
     try {
       const apiProject = await apiCreateProject(data);
       const mapped = mapApiProject(apiProject);

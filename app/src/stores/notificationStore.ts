@@ -113,9 +113,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   pushNotification: (notif: AppNotification) => {
-    set((state) => ({
-      notifications: [notif, ...state.notifications],
-      unreadCount: state.unreadCount + 1,
-    }));
+    set((state) => {
+      if (state.notifications.some((n) => n.id === notif.id)) {
+        return state;
+      }
+      return {
+        notifications: [notif, ...state.notifications],
+        unreadCount: state.unreadCount + (notif.is_read ? 0 : 1),
+      };
+    });
   },
 }));

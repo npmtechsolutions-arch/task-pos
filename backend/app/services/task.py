@@ -63,6 +63,9 @@ class TaskService:
         query = select(Task)
 
         if filters:
+            if filters.tenant_id:
+                query = query.where(Task.tenant_id == filters.tenant_id)
+
             if filters.project_id:
                 query = query.where(Task.project_id == filters.project_id)
 
@@ -121,10 +124,13 @@ class TaskService:
     async def get_user_tasks(
         self,
         user_id: str,
+        tenant_id: Optional[str] = None,
         status: Optional[TaskStatus] = None,
     ) -> List[Task]:
         """Get tasks assigned to user."""
         query = select(Task).where(Task.primary_assignee_id == user_id)
+        if tenant_id:
+            query = query.where(Task.tenant_id == tenant_id)
 
         if status:
             query = query.where(Task.status == status)
@@ -137,13 +143,17 @@ class TaskService:
         result = await self.db.execute(query)
         return result.scalars().all()
 
-    async def create(self, task_data: TaskCreate, reporter_id: str) -> Task:
+    async def create(self, task_data: TaskCreate, reporter_id: str, reporter_name: Optional[str] = None) -> Task:
         """Create a new task."""
         logger.info(
             "Creating new task",
             title=task_data.title,
             project=task_data.project_id,
         )
+
+        # If this is a subtask, enforce task_type unless caller explicitly set it.
+        if task_data.parent_id and task_data.task_type == TaskType.TASK:
+            task_data = task_data.model_copy(update={"task_type": TaskType.SUBTASK})
 
         # Create task
         task = Task(
@@ -225,7 +235,7 @@ class TaskService:
                     task_title=task.title,
                     project_id=task.project_id,
                     project_name="",
-                    assigned_by_name=reporter_id,
+                    assigned_by_name=reporter_name or reporter_id,
                 )
                 # Push over WebSocket immediately
                 await manager.send_to_user(task.primary_assignee_id, {

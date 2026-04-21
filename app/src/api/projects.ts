@@ -20,7 +20,18 @@ export interface ProjectCreatePayload {
   budget?: number | null;
   department?: string | null;
   business_unit?: string | null;
+  github_url?: string | null;
   settings?: Record<string, unknown>;
+}
+
+export interface ProjectPrdFileApi {
+  id: string;
+  file_name: string;
+  version: number;
+  file_type?: string | null;
+  file_size_bytes?: number | null;
+  uploaded_by: string;
+  created_at: string;
 }
 
 export interface ProjectUpdatePayload {
@@ -89,6 +100,8 @@ export interface ApiProject {
   total_actual_hours: number;
   settings: Record<string, unknown>;
   custom_fields: Record<string, unknown>;
+  github_url?: string | null;
+  prd_file?: ProjectPrdFileApi | null;
   created_at: string;
   updated_at: string;
   archived_at?: string;
@@ -127,8 +140,49 @@ export async function fetchProjectById(projectId: string): Promise<ApiProjectDet
   return response.data;
 }
 
-export async function createProject(data: ProjectCreatePayload): Promise<ApiProject> {
+export async function createProject(data: ProjectCreatePayload | FormData): Promise<ApiProject> {
+  const headers = authHeaders();
+  if (data instanceof FormData) {
+    const response = await axios.post(`${API_URL}/projects`, data, {
+      headers: { Authorization: headers.Authorization ?? '' },
+    });
+    return response.data;
+  }
   const response = await axios.post(`${API_URL}/projects`, data, {
+    headers,
+  });
+  return response.data;
+}
+
+export async function downloadProjectPrd(projectId: string, fallbackName: string): Promise<void> {
+  const response = await axios.get(`${API_URL}/projects/${projectId}/prd/download`, {
+    headers: authHeaders(),
+    responseType: 'blob',
+  });
+  const cd = response.headers['content-disposition'] as string | undefined;
+  let name = fallbackName;
+  if (cd) {
+    const m = /filename\*?=(?:UTF-8'')?["']?([^\"';]+)/i.exec(cd);
+    if (m) name = decodeURIComponent(m[1]);
+  }
+  const url = window.URL.createObjectURL(response.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+export interface BulkMembersPayload {
+  user_ids: string[];
+  role?: 'owner' | 'admin' | 'manager' | 'member' | 'viewer';
+}
+
+export async function addProjectMembersBulk(
+  projectId: string,
+  body: BulkMembersPayload
+): Promise<ApiProjectMember[]> {
+  const response = await axios.post(`${API_URL}/projects/${projectId}/members/bulk`, body, {
     headers: authHeaders(),
   });
   return response.data;

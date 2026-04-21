@@ -24,7 +24,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
-    from app.models.project import Project
+    from app.models.project import Project, ProjectPhase
     from app.models.tenant import Tenant
 
 
@@ -180,7 +180,7 @@ class Task(Base):
         index=True,
     )
 
-    # Project
+    # Project & Phase
     project_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("projects.id"), nullable=False, index=True
     )
@@ -188,6 +188,13 @@ class Task(Base):
         "Project", back_populates="tasks", lazy="selectin"
     )
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="tasks")
+
+    phase_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("project_phases.id", ondelete="SET NULL"), index=True
+    )
+    phase: Mapped[Optional["ProjectPhase"]] = relationship(
+        "ProjectPhase", back_populates="tasks", lazy="selectin"
+    )
 
     # Parent/Subtask relationship
     parent_id: Mapped[Optional[str]] = mapped_column(

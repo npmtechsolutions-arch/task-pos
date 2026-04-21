@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import and_, select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -295,6 +295,7 @@ async def get_messages(
     room_id: str,
     limit: int = Query(50, ge=1, le=200),
     before_id: Optional[str] = Query(None),
+    mark_read: bool = Query(False, description="If true, updates last_read_at (avoid on polling)"),
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -320,7 +321,29 @@ async def get_messages(
     users_result = await db.execute(select(User).where(User.id.in_(sender_ids)))
     users = {u.id: {"name": f"{u.first_name or ''} {u.last_name or ''}".strip(), "avatar": None} for u in users_result.scalars().all()}
 
-    # Mark room as read
+    if mark_read:
+        mem_result = await db.execute(
+            select(ChatRoomMember).where(
+                ChatRoomMember.room_id == room_id,
+                ChatRoomMember.user_id == current_user.id,
+            )
+        )
+        member = mem_result.scalar_one_or_none()
+        if member:
+            member.last_read_at = datetime.utcnow()
+            await db.commit()
+
+    return [_msg_to_resp(m, users) for m in messages]
+
+
+@router.post("/rooms/{room_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+async def mark_room_read(
+    room_id: str,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark the current user's position in this room as read (call when opening a room)."""
+    await _get_room_or_404(room_id, current_user.id, db)
     mem_result = await db.execute(
         select(ChatRoomMember).where(
             ChatRoomMember.room_id == room_id,
@@ -331,8 +354,7 @@ async def get_messages(
     if member:
         member.last_read_at = datetime.utcnow()
         await db.commit()
-
-    return [_msg_to_resp(m, users) for m in messages]
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/rooms/{room_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -375,7 +397,7 @@ async def send_message(
     await db.refresh(msg)
 
     sender_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
-    return MessageResponse(
+    msg_resp = MessageResponse(
         id=msg.id, room_id=msg.room_id, sender_id=msg.sender_id,
         sender_name=sender_name, sender_avatar=None,
         message_type=msg.message_type, content=msg.content,
@@ -383,6 +405,26 @@ async def send_message(
         reply_to_id=msg.reply_to_id, is_edited=msg.is_edited, is_deleted=msg.is_deleted,
         mentions=msg.mentions, created_at=msg.created_at, updated_at=msg.updated_at,
     )
+
+    try:
+        from app.websocket.manager import manager
+
+        mem_rows = await db.execute(
+            select(ChatRoomMember.user_id).where(ChatRoomMember.room_id == room_id)
+        )
+        user_ids = [r[0] for r in mem_rows.fetchall()]
+        await manager.broadcast_to_users(
+            user_ids,
+            {
+                "type": "chat_message",
+                "room_id": room_id,
+                "message": msg_resp.model_dump(mode="json"),
+            },
+        )
+    except Exception:
+        pass
+
+    return msg_resp
 
 
 @router.delete("/messages/{message_id}", status_code=200)

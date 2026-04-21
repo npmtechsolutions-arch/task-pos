@@ -40,6 +40,13 @@ const projectSchema = z.object({
   budget: z.string().optional(),
   department: z.string().max(100).optional(),
   businessUnit: z.string().max(100).optional(),
+  githubUrl: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v?.trim() || v.trim().startsWith('https://github.com/'),
+      'Must start with https://github.com/'
+    ),
 });
 
 type ProjectFormData = z.infer<typeof projectSchema>;
@@ -52,6 +59,7 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
   const { createProject } = useProjectStore();
   const { addToast } = useUIStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [prdFile, setPrdFile] = useState<File | null>(null);
 
   const {
     register,
@@ -88,7 +96,7 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
     setIsSubmitting(true);
     try {
       const budgetVal = data.budget ? parseFloat(data.budget as unknown as string) : null;
-      await createProject({
+      const payload = {
         name: data.name,
         key: data.key.toUpperCase(),
         description: data.description,
@@ -98,7 +106,17 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
         budget: budgetVal,
         department: data.department || null,
         business_unit: data.businessUnit || null,
-      });
+        github_url: data.githubUrl?.trim() || null,
+      };
+
+      if (prdFile) {
+        const fd = new FormData();
+        fd.append('project', JSON.stringify(payload));
+        fd.append('prd_file', prdFile);
+        await createProject(fd);
+      } else {
+        await createProject(payload);
+      }
 
       addToast({
         type: 'success',
@@ -161,6 +179,33 @@ export function ProjectForm({ onSuccess }: ProjectFormProps) {
           rows={3}
           {...register('description')}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="githubUrl">GitHub repository (optional)</Label>
+        <Input
+          id="githubUrl"
+          placeholder="https://github.com/org/repo"
+          {...register('githubUrl')}
+          className={cn(errors.githubUrl && 'border-red-500')}
+        />
+        {errors.githubUrl && (
+          <p className="text-sm text-red-500">{errors.githubUrl.message}</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="prd">PRD document (optional)</Label>
+        <Input
+          id="prd"
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,application/pdf"
+          className="cursor-pointer"
+          onChange={(e) => setPrdFile(e.target.files?.[0] ?? null)}
+        />
+        {prdFile && (
+          <p className="text-xs text-gray-500">Selected: {prdFile.name}</p>
+        )}
       </div>
 
       {/* Visibility */}

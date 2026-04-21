@@ -62,8 +62,17 @@ class Settings(BaseSettings):
 
     # CORS
     allowed_origins: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:5173"],
+        default=[
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ],
         alias="ALLOWED_ORIGINS",
+    )
+    allowed_origin_regex: str = Field(
+        default=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        alias="ALLOWED_ORIGIN_REGEX",
     )
 
     @validator("allowed_origins", pre=True)

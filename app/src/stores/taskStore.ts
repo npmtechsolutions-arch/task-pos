@@ -420,7 +420,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (!parent) return;
       const response = await axios.post(
         `${API_URL}/tasks`,
-        { title, project_id: parent.projectId, parent_id: parentId, priority: parent.priority },
+        { title, project_id: parent.projectId, parent_id: parentId, priority: parent.priority, task_type: 'subtask' },
         { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
       );
       const newSubtask = mapApiTask(response.data);

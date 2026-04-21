@@ -1,12 +1,36 @@
 import { useState, useEffect } from 'react';
 import { Plus, ShieldCheck, Loader2, X, RefreshCw, Eye, EyeOff, Trash2, Key } from 'lucide-react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 const authHeader = () => {
   const token = localStorage.getItem('token') || localStorage.getItem('access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
+
+function getApiErrorMessage(error: unknown): string {
+  const err = error as AxiosError<any>;
+
+  if (err.response) {
+    const detail = err.response.data?.detail;
+    if (Array.isArray(detail)) {
+      return detail.map((item) => item?.msg || JSON.stringify(item)).join(', ');
+    }
+    if (typeof detail === 'string') return detail;
+    return `Request failed with status ${err.response.status}`;
+  }
+
+  if (err.request) {
+    return 'Network error: backend unreachable or blocked by CORS/HTTPS mismatch';
+  }
+
+  return err.message || 'Create failed';
+}
+
+function isNetworkError(error: unknown): boolean {
+  const err = error as AxiosError;
+  return !!err.request && !err.response;
+}
 
 type UserRole = 'admin' | 'manager' | 'member' | 'viewer' | 'owner';
 const ROLES: UserRole[] = ['owner', 'admin', 'manager', 'member', 'viewer'];
@@ -55,15 +79,57 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     e.preventDefault();
     if (!form.email || !form.password) { setError('Email and password are required'); return; }
     setSaving(true); setError('');
+    const payload = {
+      email: form.email,
+      first_name: form.first_name,
+      last_name: form.last_name,
+      password: form.password,
+      role: form.role,
+      title: form.title || undefined,
+      department: form.department || undefined,
+    };
+
+    console.log('[CreateUser] API URL:', `${API_URL}/admin/users`);
+    console.log('[CreateUser] payload:', payload);
     try {
-      const res = await axios.post(`${API_URL}/admin/users`, {
-        email: form.email, first_name: form.first_name, last_name: form.last_name,
-        password: form.password, role: form.role,
-        title: form.title || undefined, department: form.department || undefined,
-      }, { headers: authHeader() });
+      const res = await axios.post(`${API_URL}/admin/users`, payload, {
+        headers: {
+          ...authHeader(),
+          'Content-Type': 'application/json',
+        },
+      });
       onCreated(res.data); onClose();
-    } catch (e: any) {
-      setError(e.response?.data?.detail ?? e.message ?? 'Create failed');
+    } catch (e: unknown) {
+      const err = e as AxiosError;
+      console.error('[CreateUser] error message:', err.message);
+      console.error('[CreateUser] error response:', err.response);
+      console.error('[CreateUser] full error object:', err);
+      console.error('[CreateUser] frontend origin:', window.location.origin);
+      console.error('[CreateUser] resolved API URL:', API_URL);
+
+      // Recovery path: if network dropped after backend committed,
+      // verify by email and treat as success to avoid duplicate creation attempts.
+      if (isNetworkError(e)) {
+        try {
+          const check = await axios.get(`${API_URL}/admin/users`, {
+            headers: authHeader(),
+            params: { search: form.email, per_page: 20 },
+          });
+          const created = (check.data as AdminUser[]).find(
+            (u) => u.email.toLowerCase() === form.email.toLowerCase()
+          );
+          if (created) {
+            console.warn('[CreateUser] recovered after network error: user exists');
+            onCreated(created);
+            onClose();
+            return;
+          }
+        } catch (verifyError) {
+          console.error('[CreateUser] post-error verification failed:', verifyError);
+        }
+      }
+
+      setError(getApiErrorMessage(e));
     } finally { setSaving(false); }
   };
 

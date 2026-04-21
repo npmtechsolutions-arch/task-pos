@@ -1,17 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Settings, Users, Flag, BarChart3, GitBranch,
   Plus, Calendar, DollarSign, Target, AlertTriangle, CheckCircle2,
   Clock, TrendingUp, PlayCircle, PauseCircle, Archive, Loader2,
-  ChevronDown, Edit2, Save, X
+  ChevronDown, Edit2, Save, X, Github, FileText, Download, Check,
 } from 'lucide-react';
 import { useProjectStore, useUIStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { cn, debounce } from '@/lib/utils';
+import { addProjectMembersBulk, downloadProjectPrd } from '@/api/projects';
 import { PhasesPanel } from '@/components/projects/PhasesPanel';
 import { MilestonesPanel } from '@/components/projects/MilestonesPanel';
 import { CriticalPathView } from '@/components/projects/CriticalPathView';
@@ -296,7 +297,14 @@ export function ProjectDetail() {
       {/* Tab Content */}
       <div className="max-w-7xl mx-auto px-6 py-6">
         {activeTab === 'overview' && (
-          <ProjectOverview project={project} budgetUtil={budgetUtil} />
+          <ProjectOverview
+            project={project}
+            budgetUtil={budgetUtil}
+            onDownloadPrd={() =>
+              project.prdFile &&
+              downloadProjectPrd(project.id, project.prdFile.fileName)
+            }
+          />
         )}
         {activeTab === 'phases' && (
           <PhasesPanel projectId={project.id} />
@@ -320,7 +328,15 @@ export function ProjectDetail() {
 
 /* ─── Sub-panels ─────────────────────────────────────────────────────────── */
 
-function ProjectOverview({ project, budgetUtil }: { project: any; budgetUtil: number | null }) {
+function ProjectOverview({
+  project,
+  budgetUtil,
+  onDownloadPrd,
+}: {
+  project: any;
+  budgetUtil: number | null;
+  onDownloadPrd: () => void;
+}) {
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [budgetValue, setBudgetValue] = useState(project.budget || '');
   const { updateProjectApi } = useProjectStore();
@@ -410,6 +426,40 @@ function ProjectOverview({ project, budgetUtil }: { project: any; budgetUtil: nu
         ))}
       </div>
 
+      {(project.githubUrl || project.prdFile) && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2 mb-1">
+              <FileText className="w-4 h-4 text-violet-500" /> Links &amp; PRD
+            </h3>
+            <p className="text-sm text-gray-500">Repository and product requirements for this project.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {project.githubUrl && (
+              <a
+                href={project.githubUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800"
+              >
+                <Github className="w-4 h-4" /> GitHub
+              </a>
+            )}
+            {project.prdFile && (
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => onDownloadPrd()}
+              >
+                <Download className="w-4 h-4" />
+                PRD (v{project.prdFile.version}) — {project.prdFile.fileName}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Objectives */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -458,7 +508,7 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [role, setRole] = useState('member');
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -470,27 +520,66 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  const searchUsers = async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); return; }
-    try {
-      const res = await axios.get(`${API_URL}/users?search=${encodeURIComponent(q)}&per_page=10`, { headers: getAuthHeader() });
-      setSearchResults(res.data?.items || res.data || []);
-    } catch { setSearchResults([]); }
+  useEffect(() => {
+    setMembers(initialMembers);
+  }, [initialMembers]);
+
+  const runSearch = useMemo(
+    () =>
+      debounce((q: string) => {
+        if (!q.trim()) {
+          setSearchResults([]);
+          return;
+        }
+        axios
+          .get(`${API_URL}/users/search`, {
+            params: { q: q.trim(), limit: 15 },
+            headers: getAuthHeader(),
+          })
+          .then((res) => setSearchResults(res.data?.items ?? []))
+          .catch(() => setSearchResults([]));
+      }, 300),
+    [API_URL]
+  );
+
+  const toggleSelect = (userId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
   };
 
-  const handleAdd = async () => {
-    if (!selectedUser) { setModalError('Select a user first'); return; }
-    setSaving(true); setModalError('');
+  const handleBulkAdd = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) {
+      setModalError('Select at least one user');
+      return;
+    }
+    setSaving(true);
+    setModalError('');
     try {
-      const res = await axios.post(`${API_URL}/projects/${projectId}/members`,
-        { user_id: selectedUser.id, role },
-        { headers: getAuthHeader() }
-      );
-      setMembers(prev => [...prev, res.data]);
-      setShowModal(false); setSelectedUser(null); setSearchQuery(''); setSearchResults([]); setRole('member');
+      const added = await addProjectMembersBulk(projectId, {
+        user_ids: ids,
+        role: role as 'owner' | 'admin' | 'manager' | 'member' | 'viewer',
+      });
+      setMembers((prev) => {
+        const have = new Set(prev.map((m) => m.user_id ?? m.user?.id));
+        const fresh = added.filter((m) => !have.has(m.user_id));
+        return [...prev, ...fresh];
+      });
+      setShowModal(false);
+      setSelectedIds(new Set());
+      setSearchQuery('');
+      setSearchResults([]);
+      setRole('member');
     } catch (e: any) {
-      setModalError(e.response?.data?.detail ?? e.message ?? 'Failed to add member');
-    } finally { setSaving(false); }
+      const d = e.response?.data?.detail;
+      setModalError(typeof d === 'string' ? d : e.message ?? 'Failed to add members');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleRemove = async (userId: string) => {
@@ -514,33 +603,63 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
               <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-500" /> Add Member
               </h3>
-              <button onClick={() => { setShowModal(false); setModalError(''); setSelectedUser(null); setSearchQuery(''); setSearchResults([]); }}
+              <button onClick={() => { setShowModal(false); setModalError(''); setSelectedIds(new Set()); setSearchQuery(''); setSearchResults([]); }}
                 className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">✕</button>
             </div>
             <div className="p-6 space-y-4">
               {modalError && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{modalError}</div>}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Search User</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Search users</label>
                 <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   placeholder="Type name or email…"
                   value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); searchUsers(e.target.value); setSelectedUser(null); }}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSearchQuery(v);
+                    runSearch(v);
+                  }}
                 />
-                {searchResults.length > 0 && !selectedUser && (
-                  <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden shadow-sm max-h-40 overflow-y-auto">
-                    {searchResults.map(u => (
-                      <button key={u.id} type="button"
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-indigo-50 text-left transition-colors"
-                        onClick={() => { setSelectedUser(u); setSearchQuery(`${u.first_name} ${u.last_name} (${u.email})`); setSearchResults([]); }}>
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {(u.first_name?.[0] ?? '?')}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">{u.first_name} {u.last_name}</p>
-                          <p className="text-xs text-gray-400">{u.email}</p>
-                        </div>
-                      </button>
-                    ))}
+                {selectedIds.size > 0 && (
+                  <p className="text-xs text-indigo-600 mt-1">{selectedIds.size} selected — add in one request</p>
+                )}
+                {searchResults.length > 0 && (
+                  <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden shadow-sm max-h-48 overflow-y-auto">
+                    {searchResults.map((u) => {
+                      const onProject = members.some((m) => (m.user_id ?? m.user?.id) === u.id);
+                      const sel = selectedIds.has(u.id);
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          disabled={onProject}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors',
+                            onProject ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hover:bg-indigo-50',
+                            sel && !onProject && 'bg-indigo-50'
+                          )}
+                          onClick={() => !onProject && toggleSelect(u.id)}
+                        >
+                          <div
+                            className={cn(
+                              'w-5 h-5 rounded border flex items-center justify-center flex-shrink-0',
+                              sel ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
+                            )}
+                          >
+                            {sel && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {u.first_name?.[0] ?? '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-800 truncate">
+                              {u.first_name} {u.last_name}
+                              {onProject && <span className="text-gray-400 font-normal"> (already on project)</span>}
+                            </p>
+                            <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -549,7 +668,7 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
                 <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                   value={role} onChange={e => setRole(e.target.value)}>
                   <option value="member">Member</option>
-                  <option value="lead">Lead</option>
+                  <option value="manager">Manager</option>
                   <option value="admin">Admin</option>
                   <option value="viewer">Viewer</option>
                 </select>
@@ -557,9 +676,15 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowModal(false)}
                   className="flex-1 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button type="button" onClick={handleAdd} disabled={!selectedUser || saving}
+                <button type="button" onClick={handleBulkAdd} disabled={selectedIds.size === 0 || saving}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60">
-                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</> : 'Add Member'}
+                  {saving ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Adding…</>
+                  ) : selectedIds.size ? (
+                    `Add ${selectedIds.size} member${selectedIds.size === 1 ? '' : 's'}`
+                  ) : (
+                    'Select users'
+                  )}
                 </button>
               </div>
             </div>

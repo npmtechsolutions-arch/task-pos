@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -37,26 +37,32 @@ class UserService:
         skip: int = 0,
         limit: int = 100,
         search: Optional[str] = None,
+        tenant_id: Optional[str] = None,
     ) -> tuple[List[User], int]:
-        """Get active users with optional search."""
-        query = select(User).where(User.is_active == True)
-
+        """Get active users with optional search (tenant-scoped when tenant_id is set)."""
+        conditions = [User.is_active == True]
+        if tenant_id:
+            conditions.append(User.tenant_id == tenant_id)
         if search:
-            search_filter = or_(
-                User.first_name.ilike(f"%{search}%"),
-                User.last_name.ilike(f"%{search}%"),
-                User.email.ilike(f"%{search}%"),
+            term = search.strip()
+            conditions.append(
+                or_(
+                    User.first_name.ilike(f"%{term}%"),
+                    User.last_name.ilike(f"%{term}%"),
+                    User.email.ilike(f"%{term}%"),
+                )
             )
-            query = query.where(search_filter)
 
-        # Get total count
-        count_result = await self.db.execute(
-            select(User).where(User.is_active == True)
+        where_clause = and_(*conditions)
+        total = (await self.db.execute(select(func.count(User.id)).where(where_clause))).scalar() or 0
+
+        query = (
+            select(User)
+            .where(where_clause)
+            .order_by(User.email)
+            .offset(skip)
+            .limit(limit)
         )
-        total = len(count_result.scalars().all())
-
-        # Get paginated results
-        query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all(), total
 

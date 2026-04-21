@@ -55,6 +55,7 @@ async def list_tasks(
         effective_assignee_id = current_user.id
 
     filters = TaskFilterParams(
+        tenant_id=current_user.tenant_id,
         project_id=project_id,
         status=status,
         priority=priority,
@@ -93,6 +94,7 @@ async def get_my_tasks(
     else:
         tasks = await task_service.get_user_tasks(
             user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
             status=status,
         )
 
@@ -123,7 +125,13 @@ async def create_task(
     task_service = TaskService(db)
 
     try:
-        task = await task_service.create(task_data, current_user.id)
+        reporter_name = (
+            f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+            or getattr(current_user, "full_name", "")
+            or getattr(current_user, "email", "")
+            or current_user.id
+        )
+        task = await task_service.create(task_data, current_user.id, reporter_name=reporter_name)
         return TaskResponse.model_validate(task)
     except ValueError as e:
         raise HTTPException(

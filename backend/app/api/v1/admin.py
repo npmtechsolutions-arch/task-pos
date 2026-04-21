@@ -7,11 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 import bcrypt
 
 from app.api.deps import get_current_user, get_db
 from app.core.logging import get_logger
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
 from app.models.employee import EmployeeProfile
 from app.services.notification import NotificationService
 
@@ -75,7 +76,7 @@ async def list_all_users(
 ):
     """List all users — admin only."""
     require_admin(current_user)
-    q = select(User)
+    q = select(User).where(User.tenant_id == current_user.tenant_id)
     if search:
         like = f"%{search}%"
         q = q.where(
@@ -100,6 +101,19 @@ async def create_user(
 ):
     """Super admin creates a new user with specified role."""
     require_admin(current_user)
+    logger.info(
+        "Admin create user request",
+        admin_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        payload={
+            "email": data.email,
+            "first_name": data.first_name,
+            "last_name": data.last_name,
+            "role": str(data.role),
+            "title": data.title,
+            "department": data.department,
+        },
+    )
 
     # Check email uniqueness
     existing = await db.execute(select(User).where(User.email == data.email))
@@ -110,12 +124,15 @@ async def create_user(
     pw_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
     user = User(
         id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
         email=data.email,
         first_name=data.first_name,
         last_name=data.last_name,
         password_hash=pw_hash,
         role=data.role,
+        status=UserStatus.ACTIVE,
         is_active=True,
+        is_verified=True,
     )
     db.add(user)
     await db.flush()
@@ -129,7 +146,12 @@ async def create_user(
         )
         db.add(profile)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.error("Create user integrity error", error=str(exc), email=data.email)
+        raise HTTPException(status_code=400, detail="Unable to create user due to invalid data")
     await db.refresh(user)
 
     # Notify all admins & owners
@@ -139,7 +161,10 @@ async def create_user(
     for adm in admins:
         # Prevent self-notification if admin created the user
         if adm.id != current_user.id:
-            await ns.notify_user_hired(adm.id, f"{data.first_name} {data.last_name}", user.id)
+            try:
+                await ns.notify_user_hired(adm.id, f"{data.first_name} {data.last_name}", user.id)
+            except Exception as exc:
+                logger.error("Failed sending user-created notification", error=str(exc), admin_id=adm.id)
 
     logger.info("Admin created user", admin_id=current_user.id, new_user_id=user.id)
     return AdminUserResponse.model_validate(user)

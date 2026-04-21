@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bell, Check, CheckCheck, Trash2, ExternalLink, Loader2, Volume2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bell, Check, CheckCheck, Trash2, ExternalLink, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useNotificationStore } from '@/stores/notificationStore';
-import { useAuthStore, useUIStore } from '@/stores';
+import { useAuthStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 
 const POLL_INTERVAL = 30_000; // 30 seconds
@@ -12,27 +12,6 @@ const POLL_INTERVAL = 30_000; // 30 seconds
 async function requestPermission() {
   if ('Notification' in window && Notification.permission === 'default') {
     await Notification.requestPermission();
-  }
-}
-
-// Vibrate + browser push for new notification
-function triggerNotificationAlert(title: string, body: string) {
-  // Vibration API (mobile/some browsers)
-  if ('vibrate' in navigator) {
-    navigator.vibrate([200, 100, 200]);
-  }
-  // Browser Notification
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      const n = new Notification(title, {
-        body,
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        tag: 'app-notification',
-        renotify: true,
-      });
-      setTimeout(() => n.close(), 5000);
-    } catch {}
   }
 }
 
@@ -69,8 +48,6 @@ export function NotificationBell() {
     markAllRead,
     deleteNotification,
   } = useNotificationStore();
-  const { user } = useAuthStore();
-  const { addToast } = useUIStore();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -83,47 +60,14 @@ export function NotificationBell() {
     if (token) fetchNotifications(token, true);
   }, [token]);
 
-  // WebSocket connection for real-time notifications
+  // Polling fallback in case WebSocket is down/intermittent.
   useEffect(() => {
-    if (!token || !user?.id) return;
-
-    // Connect to global WS (same one used for chat)
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = import.meta.env.VITE_API_URL 
-      ? new URL(import.meta.env.VITE_API_URL).host 
-      : 'localhost:8000';
-    
-    // Fallback if VITE_API_URL contains a path, just take the origin
-    const wsUrl = `${wsProtocol}//${wsHost}/ws/${user.id}?token=${token}`;
-    
-    const ws = new WebSocket(wsUrl);
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "NEW_NOTIFICATION" && data.data) {
-          // Push to state
-          useNotificationStore.getState().pushNotification(data.data);
-          
-          // Show Toast
-          addToast({
-            type: 'info',
-            title: data.data.title,
-            message: data.data.message || 'You have a new notification',
-          });
-
-          // Trigger Vibrate/System alert
-          triggerNotificationAlert(data.data.title, data.data.message || '');
-        }
-      } catch (e) {
-        console.error("WS Message Error", e);
-      }
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [token, user?.id, addToast]);
+    if (!token) return;
+    const timer = window.setInterval(() => {
+      fetchNotifications(token, true);
+    }, POLL_INTERVAL);
+    return () => window.clearInterval(timer);
+  }, [token, fetchNotifications]);
 
 
   // Fetch on open

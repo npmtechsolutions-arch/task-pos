@@ -113,6 +113,8 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     key: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    prd_url: Mapped[Optional[str]] = mapped_column(Text)
+    github_url: Mapped[Optional[str]] = mapped_column(String(500))
 
     # --- Lifecycle & Status ---
     status: Mapped[ProjectStatus] = mapped_column(default=ProjectStatus.DRAFT, index=True)
@@ -204,6 +206,12 @@ class Project(Base):
         "Milestone", back_populates="project", lazy="selectin",
         cascade="all, delete-orphan", order_by="Milestone.due_date"
     )
+    prd_files: Mapped[List["ProjectPrdFile"]] = relationship(
+        "ProjectPrdFile",
+        back_populates="project",
+        lazy="noload",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def budget_utilization(self) -> float:
@@ -264,6 +272,32 @@ class ProjectMember(Base):
         return f"<ProjectMember(project={self.project_id}, user={self.user_id}, role={self.role})>"
 
 
+class ProjectPrdFile(Base):
+    """Versioned PRD document attached to a project."""
+
+    __tablename__ = "project_prd_files"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    file_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    storage_key: Mapped[str] = mapped_column(Text, nullable=False)
+    file_type: Mapped[Optional[str]] = mapped_column(String(255))
+    file_size_bytes: Mapped[Optional[int]] = mapped_column(Integer)
+    uploaded_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="prd_files")
+    uploader: Mapped["User"] = relationship("User", foreign_keys=[uploaded_by], lazy="selectin")
+
+    def __repr__(self) -> str:
+        return f"<ProjectPrdFile(id={self.id}, project={self.project_id}, v={self.version})>"
+
+
 class ProjectPhase(Base):
     """Project phase model for structured progression."""
 
@@ -305,6 +339,11 @@ class ProjectPhase(Base):
     # Relationships
     project: Mapped["Project"] = relationship("Project", back_populates="phases")
     owner: Mapped[Optional["User"]] = relationship("User", foreign_keys=[owner_id], lazy="selectin")
+    tasks: Mapped[List["Task"]] = relationship(
+        "Task",
+        back_populates="phase",
+        lazy="noload"
+    )
 
     def __repr__(self) -> str:
         return f"<ProjectPhase(id={self.id}, name={self.name}, project={self.project_id})>"

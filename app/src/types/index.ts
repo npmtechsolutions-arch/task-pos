@@ -100,6 +100,12 @@ export interface Milestone {
   createdAt: string;
 }
 
+export interface ProjectPrdFileMeta {
+  id: string;
+  fileName: string;
+  version: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -110,6 +116,8 @@ export interface Project {
   owner: User;
   members: ProjectMember[];
   settings: ProjectSettings;
+  githubUrl?: string;
+  prdFile?: ProjectPrdFileMeta;
   // Timeline
   startDate?: string;
   endDate?: string;

@@ -52,6 +52,7 @@ async def list_users(
         skip=(page - 1) * per_page,
         limit=per_page,
         search=search,
+        tenant_id=current_user.tenant_id,
     )
 
     return UserListResponse(
@@ -59,6 +60,29 @@ async def list_users(
         total=total,
         page=page,
         per_page=per_page,
+    )
+
+
+@router.get("/search", response_model=UserListResponse)
+async def search_users_quick(
+    q: str = Query(..., min_length=1, description="Name or email fragment"),
+    limit: int = Query(15, ge=1, le=30),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserListResponse:
+    """Fast tenant-scoped user lookup for pickers (small limit, indexed-friendly ILIKE)."""
+    user_service = UserService(db)
+    users, total = await user_service.get_active_users(
+        skip=0,
+        limit=limit,
+        search=q,
+        tenant_id=current_user.tenant_id,
+    )
+    return UserListResponse(
+        items=[UserResponse.model_validate(u) for u in users],
+        total=total,
+        page=1,
+        per_page=limit,
     )
 
 

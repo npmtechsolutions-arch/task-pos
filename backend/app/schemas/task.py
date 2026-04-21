@@ -140,6 +140,7 @@ class TaskCreate(TaskBase):
 
     project_id: str
     tenant_id: Optional[str] = None
+    phase_id: Optional[str] = None
     parent_id: Optional[str] = None
     primary_assignee_id: Optional[str] = None
     assignee_ids: Optional[List[str]] = None
@@ -156,6 +157,7 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     description: Optional[str] = None
     status: Optional[TaskStatus] = None
+    phase_id: Optional[str] = None
     priority: Optional[TaskPriority] = None
     primary_assignee_id: Optional[str] = None
     assignee_ids: Optional[List[str]] = None
@@ -181,6 +183,7 @@ class TaskResponse(TaskBase):
     id: str
     project_id: str
     tenant_id: str
+    phase_id: Optional[str] = None
     parent_id: Optional[str] = None
     status: TaskStatus
     primary_assignee_id: Optional[str] = None
@@ -228,7 +231,9 @@ class TaskListResponse(BaseModel):
 class TaskFilterParams(BaseModel):
     """Task filter parameters."""
 
+    tenant_id: Optional[str] = None
     project_id: Optional[str] = None
+    phase_id: Optional[str] = None
     status: Optional[TaskStatus] = None
     priority: Optional[TaskPriority] = None
     primary_assignee_id: Optional[str] = None

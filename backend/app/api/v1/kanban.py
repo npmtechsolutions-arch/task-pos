@@ -195,22 +195,31 @@ async def get_kanban_board(
     tasks_result = await db.execute(
         select(Task)
         .options(selectinload(Task.labels), selectinload(Task.assignments), selectinload(Task.primary_assignee))
-        .where(Task.project_id == project_id)
+        .where(Task.project_id == project_id, Task.tenant_id == current_user.tenant_id)
         .order_by(Task.position)
     )
     all_tasks = tasks_result.scalars().all()
 
-    # Group tasks by board_column_id
+    # Group tasks by board_column_id.
+    # Tasks created outside Kanban may have no board_column_id; map them to a default column
+    # so they are still visible on the board.
+    sorted_columns = sorted(board.columns, key=lambda c: c.position)
+    default_column = next(
+        (c for c in sorted_columns if c.column_type.value in ("todo", "backlog")),
+        sorted_columns[0] if sorted_columns else None,
+    )
+    default_column_id = default_column.id if default_column else None
+
     tasks_by_column: dict = {}
     for task in all_tasks:
-        col_id = task.board_column_id or "unassigned"
+        col_id = task.board_column_id or default_column_id or "unassigned"
         tasks_by_column.setdefault(col_id, []).append(task)
 
     # Build column responses
     column_responses: List[KanbanColumnWithTasksResponse] = []
     total_tasks = 0
 
-    for col in sorted(board.columns, key=lambda c: c.position):
+    for col in sorted_columns:
         col_tasks = tasks_by_column.get(col.id, [])
         cards = []
         for task in col_tasks:
@@ -269,6 +278,7 @@ async def create_kanban_task(
         title=task_data.title,
         description=task_data.description,
         project_id=task_data.project_id,
+        tenant_id=current_user.tenant_id,
         board_column_id=task_data.board_column_id,
         status=task_data.status,
         priority=task_data.priority,
@@ -292,6 +302,42 @@ async def create_kanban_task(
     await _log_activity(db, task.id, current_user.id, ActivityAction.CREATED, "Task created")
     await db.commit()
     await db.refresh(task)
+
+    # 🔔 Notify assignee (if task assigned to someone else)
+    if task.primary_assignee_id and task.primary_assignee_id != current_user.id:
+        try:
+            from app.services.notification import NotificationService
+            from app.websocket.manager import manager
+
+            assigned_by = (
+                f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+                or getattr(current_user, "full_name", "")
+                or getattr(current_user, "email", "")
+                or current_user.id
+            )
+            notif_service = NotificationService(db)
+            notif = await notif_service.notify_task_assigned(
+                user_id=task.primary_assignee_id,
+                task_id=task.id,
+                task_title=task.title,
+                project_id=task.project_id,
+                project_name="",
+                assigned_by_name=assigned_by,
+            )
+            await manager.send_to_user(task.primary_assignee_id, {
+                "type": "notification",
+                "data": {
+                    "id": notif.id,
+                    "notification_type": notif.notification_type.value if hasattr(notif.notification_type, 'value') else str(notif.notification_type),
+                    "title": notif.title,
+                    "message": notif.message,
+                    "action_url": notif.action_url,
+                    "is_read": False,
+                    "created_at": notif.created_at.isoformat(),
+                }
+            })
+        except Exception as e:
+            logger.warning("Notification dispatch failed (non-critical)", error=str(e))
 
     return await _task_to_card(task, db)
 

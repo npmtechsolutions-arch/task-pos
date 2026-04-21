@@ -93,7 +93,7 @@ class NotificationService:
             ws_payload = NotificationResponse.model_validate(notification).model_dump(mode="json")
             await manager.send_to_user(
                 notification.user_id,
-                {"type": "NEW_NOTIFICATION", "data": ws_payload}
+                {"type": "notification", "data": ws_payload}
             )
         except Exception as e:
             logger.error("Failed to broadcast WebSocket notification", error=str(e))

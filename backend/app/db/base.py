@@ -31,7 +31,7 @@ class Base(DeclarativeBase):
 # Register all models for Alembic autogenerate
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.models.project import Project, ProjectMember, ProjectPhase
+from app.models.project import Project, ProjectMember, ProjectPhase, ProjectPrdFile
 from app.models.task import (
     Task, Tag, KanbanLabel, TaskDependency, TaskComment,
     TimeEntry, TaskAssignment, TaskActivity

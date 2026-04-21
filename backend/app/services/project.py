@@ -5,15 +5,18 @@ from typing import List, Optional
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.logging import get_logger
-from app.models.project import Project, ProjectMember, ProjectMemberRole, ProjectStatus
+from app.models.project import Project, ProjectMember, ProjectMemberRole, ProjectPrdFile, ProjectStatus
+from app.models.task import Task, TaskAssignment
 from app.models.user import User
 from app.schemas.project import (
     ProjectCreate,
     ProjectFilterParams,
     ProjectMemberCreate,
     ProjectMemberUpdate,
+    ProjectMembersBulkCreate,
     ProjectUpdate,
 )
 
@@ -146,6 +149,11 @@ class ProjectService:
             settings=project_data.settings or {},
             owner_id=owner_id,
             status=ProjectStatus.PLANNING,
+            github_url=project_data.github_url,
+            budget=project_data.budget,
+            department=project_data.department,
+            business_unit=project_data.business_unit,
+            prd_url=project_data.prd_url,
         )
 
         self.db.add(project)
@@ -192,6 +200,111 @@ class ProjectService:
 
         logger.info("Project created successfully", project_id=project.id)
         return project
+
+    async def get_latest_prd_file(self, project_id: str) -> Optional[ProjectPrdFile]:
+        result = await self.db.execute(
+            select(ProjectPrdFile)
+            .where(ProjectPrdFile.project_id == project_id)
+            .order_by(ProjectPrdFile.version.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def attach_prd_file(
+        self,
+        project_id: str,
+        user_id: str,
+        storage_key: str,
+        file_name: str,
+        file_type: Optional[str],
+        size: int,
+    ) -> ProjectPrdFile:
+        max_ver = (
+            await self.db.execute(
+                select(func.coalesce(func.max(ProjectPrdFile.version), 0)).where(
+                    ProjectPrdFile.project_id == project_id
+                )
+            )
+        ).scalar()
+        next_ver = int(max_ver or 0) + 1
+        row = ProjectPrdFile(
+            project_id=project_id,
+            version=next_ver,
+            file_name=file_name,
+            storage_key=storage_key,
+            file_type=file_type,
+            file_size_bytes=size,
+            uploaded_by=user_id,
+        )
+        self.db.add(row)
+        project = await self.get_by_id(project_id)
+        if project:
+            project.prd_url = storage_key
+        await self.db.commit()
+        await self.db.refresh(row)
+        return row
+
+    async def user_can_access_prd(self, project_id: str, user_id: str) -> bool:
+        if await self.is_project_member(project_id, user_id):
+            return True
+        r1 = await self.db.execute(
+            select(Task.id)
+            .where(Task.project_id == project_id, Task.primary_assignee_id == user_id)
+            .limit(1)
+        )
+        if r1.scalar_one_or_none():
+            return True
+        r2 = await self.db.execute(
+            select(TaskAssignment.id)
+            .join(Task, Task.id == TaskAssignment.task_id)
+            .where(Task.project_id == project_id, TaskAssignment.user_id == user_id)
+            .limit(1)
+        )
+        return r2.scalar_one_or_none() is not None
+
+    async def add_members_bulk(
+        self,
+        project_id: str,
+        data: ProjectMembersBulkCreate,
+    ) -> List[ProjectMember]:
+        """Add many members in one transaction; skips users already on the project."""
+        seen: set[str] = set()
+        to_add: List[str] = []
+        for uid in data.user_ids:
+            if uid in seen:
+                continue
+            seen.add(uid)
+            to_add.append(uid)
+
+        existing_rows = await self.db.execute(
+            select(ProjectMember.user_id).where(
+                ProjectMember.project_id == project_id,
+                ProjectMember.user_id.in_(to_add),
+            )
+        )
+        already = {r[0] for r in existing_rows.fetchall()}
+        new_ids = [u for u in to_add if u not in already]
+
+        for uid in new_ids:
+            self.db.add(
+                ProjectMember(
+                    project_id=project_id,
+                    user_id=uid,
+                    role=data.role,
+                )
+            )
+        if not new_ids:
+            return []
+        await self.db.commit()
+        result = await self.db.execute(
+            select(ProjectMember)
+            .where(
+                ProjectMember.project_id == project_id,
+                ProjectMember.user_id.in_(new_ids),
+            )
+            .options(selectinload(ProjectMember.user))
+        )
+        return list(result.scalars().all())
 
     async def update(
         self, project_id: str, project_data: ProjectUpdate

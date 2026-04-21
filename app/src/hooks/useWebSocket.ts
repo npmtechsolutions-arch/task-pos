@@ -45,7 +45,7 @@ export function useWebSocket({ userId, token, enabled = true }: UseWebSocketOpti
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'notification' && msg.data) {
+          if ((msg.type === 'notification' || msg.type === 'NEW_NOTIFICATION') && msg.data) {
             useNotificationStore.getState().pushNotification(msg.data);
           }
           // Future: handle 'dashboard_update', 'typing', etc.

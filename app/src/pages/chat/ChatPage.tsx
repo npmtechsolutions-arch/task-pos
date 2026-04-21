@@ -33,7 +33,11 @@ interface Message {
 }
 interface TenantUser { id: string; email: string; first_name?: string; last_name?: string; }
 
-const POLL_INTERVAL = 4000; // 4s polling (simulate near real-time)
+const POLL_INTERVAL = 45000; // slow fallback when WebSocket unavailable
+
+const WS_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1')
+  .replace(/^http/, 'ws')
+  .replace('/api/v1', '');
 
 export default function ChatPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -54,6 +58,7 @@ export default function ChatPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chatWsRef = useRef<WebSocket | null>(null);
   const currentUser = me();
 
   // Load rooms
@@ -94,7 +99,7 @@ export default function ChatPage() {
   // Fetch messages for active room
   const fetchMessages = useCallback(async (roomId: string) => {
     try {
-      const r = await axios.get(`${API}/chat/rooms/${roomId}/messages?limit=80`, { headers: auth() });
+      const r = await axios.get(`${API}/chat/rooms/${roomId}/messages?limit=80&mark_read=false`, { headers: auth() });
       setMessages(r.data || []);
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     } catch {}
@@ -107,6 +112,7 @@ export default function ChatPage() {
     setLoadingMsgs(true);
     fetchMessages(activeRoom.id);
     loadNotifications();
+    axios.post(`${API}/chat/rooms/${activeRoom.id}/read`, {}, { headers: auth() }).catch(() => {});
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
       fetchMessages(activeRoom.id);
@@ -114,6 +120,33 @@ export default function ChatPage() {
     }, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeRoom?.id]);
+
+  // Real-time messages via same user WebSocket the app uses elsewhere
+  useEffect(() => {
+    if (!activeRoom?.id || !currentUser?.id) return;
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+    if (!token) return;
+    const url = `${WS_BASE}/ws/${currentUser.id}?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(url);
+    chatWsRef.current = ws;
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'chat_message' && msg.room_id === activeRoom.id && msg.message) {
+          const incoming = msg.message as Message;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === incoming.id)) return prev;
+            return [...prev, incoming];
+          });
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        }
+      } catch { /* ignore */ }
+    };
+    return () => {
+      ws.close(1000, 'room change');
+      chatWsRef.current = null;
+    };
+  }, [activeRoom?.id, currentUser?.id]);
 
   const sendMessage = async () => {
     if (!text.trim() || !activeRoom || sending) return;
