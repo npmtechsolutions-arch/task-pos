@@ -103,7 +103,6 @@ export function PRDUploader({ projectId, onTasksInserted }: PRDUploaderProps) {
       const response = await axios.post(`${API_URL}/documents/upload-prd`, formData, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'multipart/form-data',
         },
       });
 
@@ -111,7 +110,11 @@ export function PRDUploader({ projectId, onTasksInserted }: PRDUploaderProps) {
       // Select all tasks by default
       setSelectedTasks(new Set(response.data.tasks.map((_: any, i: number) => i)));
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to process document.');
+      console.error("PRD Upload Error:", err.response?.data || err.message);
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : 
+                  (Array.isArray(detail) ? detail[0]?.msg : 'Failed to process document.');
+      setError(msg);
     } finally {
       setUploading(false);
     }

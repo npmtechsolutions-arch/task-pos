@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
     import app.models.calendar  # noqa: F401
     import app.models.hr_hierarchy  # noqa: F401
     import app.models.hr_records  # noqa: F401
+    import app.models.document  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
@@ -96,10 +97,16 @@ async def readiness_check():
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler."""
+    import traceback
+    with open("crash_log.txt", "a") as f:
+        f.write(f"\n--- CRASH {request.url.path} ---\n")
+        f.write(traceback.format_exc())
+    
     logger.error("Unhandled exception", error=str(exc), path=request.url.path)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"},
+        content={"detail": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"}
     )
 
 

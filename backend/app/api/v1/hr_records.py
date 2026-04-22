@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 from app.models.user import User, UserRole
 from app.models.hr_records import Candidate, Intern, LeaveRequest, ApprovalStatus, InternStatus
 from app.services.notification import NotificationService
+from app.core.security import get_password_hash
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -30,6 +31,7 @@ class CandidateCreate(BaseModel):
 class CandidateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    tenant_id: Optional[str] = None
     name: str
     email: str
     role: str
@@ -47,6 +49,7 @@ class InternCreate(BaseModel):
 class InternResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    tenant_id: Optional[str] = None
     name: str
     email: str
     college: Optional[str] = None
@@ -64,6 +67,7 @@ class LeaveResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     user_id: str
+    tenant_id: Optional[str] = None
     from_date: datetime
     to_date: datetime
     reason: str
@@ -85,6 +89,7 @@ async def create_candidate(
         
     candidate = Candidate(
         id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
         name=data.name,
         email=data.email,
         role=data.role,
@@ -96,7 +101,12 @@ async def create_candidate(
     await db.refresh(candidate)
     
     # Notify all admins & owners
-    admins_res = await db.execute(select(User).where(User.role.in_([UserRole.ADMIN, UserRole.OWNER])))
+    admins_res = await db.execute(
+        select(User).where(
+            User.tenant_id == current_user.tenant_id,
+            User.role.in_([UserRole.ADMIN, UserRole.OWNER]),
+        )
+    )
     admins = admins_res.scalars().all()
     ns = NotificationService(db)
     
@@ -124,7 +134,11 @@ async def list_candidates(
     if current_user.role not in (UserRole.ADMIN, UserRole.OWNER, UserRole.HR):
         raise HTTPException(status_code=403, detail="Access denied")
     
-    q = select(Candidate).order_by(Candidate.created_at.desc())
+    q = (
+        select(Candidate)
+        .where(Candidate.tenant_id == current_user.tenant_id)
+        .order_by(Candidate.created_at.desc())
+    )
     if status_filter:
         q = q.where(Candidate.status == status_filter)
         
@@ -142,7 +156,12 @@ async def approve_candidate(
     if current_user.role not in (UserRole.ADMIN, UserRole.OWNER):
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
-    candidate = await db.scalar(select(Candidate).where(Candidate.id == id))
+    candidate = await db.scalar(
+        select(Candidate).where(
+            Candidate.id == id,
+            Candidate.tenant_id == current_user.tenant_id,
+        )
+    )
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
@@ -152,18 +171,29 @@ async def approve_candidate(
     candidate.status = ApprovalStatus.APPROVED
     candidate.approved_by_id = current_user.id
     
-    import bcrypt
     from app.models.employee import EmployeeProfile
     
-    # 1. Create User
-    pw_hash = bcrypt.hashpw(b"Welcome123!", bcrypt.gensalt()).decode()
+    # 1. Create User (inside same tenant)
+    # Validate candidate role against enum (fallback to MEMBER)
+    try:
+        role_enum = UserRole(candidate.role)
+    except Exception:
+        role_enum = UserRole.MEMBER
+
+    # Avoid double-user creation if email already exists
+    existing_user = await db.scalar(select(User).where(User.email == candidate.email))
+    if existing_user:
+        raise HTTPException(status_code=400, detail="A user with this email already exists")
+
+    pw_hash = get_password_hash("Welcome123!")
     new_user = User(
         id=str(uuid.uuid4()),
+        tenant_id=candidate.tenant_id or current_user.tenant_id,
         email=candidate.email,
         first_name=candidate.name.split()[0],
         last_name=candidate.name.split()[-1] if " " in candidate.name else "",
         password_hash=pw_hash,
-        role=candidate.role,
+        role=role_enum,
         is_active=True,
     )
     db.add(new_user)
@@ -198,7 +228,12 @@ async def reject_candidate(
     if current_user.role not in (UserRole.ADMIN, UserRole.OWNER):
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
-    candidate = await db.scalar(select(Candidate).where(Candidate.id == id))
+    candidate = await db.scalar(
+        select(Candidate).where(
+            Candidate.id == id,
+            Candidate.tenant_id == current_user.tenant_id,
+        )
+    )
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
@@ -233,6 +268,7 @@ async def add_intern(
         
     intern = Intern(
         id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
         name=data.name,
         email=data.email,
         college=data.college,
@@ -250,7 +286,11 @@ async def list_interns(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    res = await db.execute(select(Intern).order_by(Intern.created_at.desc()))
+    res = await db.execute(
+        select(Intern)
+        .where(Intern.tenant_id == current_user.tenant_id)
+        .order_by(Intern.created_at.desc())
+    )
     return [InternResponse.model_validate(i) for i in res.scalars().all()]
 
 
@@ -265,6 +305,7 @@ async def apply_leave(
     """Employee applies for leave."""
     leave = LeaveRequest(
         id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
         user_id=current_user.id,
         from_date=data.from_date,
         to_date=data.to_date,
@@ -275,7 +316,12 @@ async def apply_leave(
     await db.refresh(leave)
     
     # Notify HR and Managers
-    hr_res = await db.execute(select(User).where(User.role.in_([UserRole.ADMIN, UserRole.HR])))
+    hr_res = await db.execute(
+        select(User).where(
+            User.tenant_id == current_user.tenant_id,
+            User.role.in_([UserRole.ADMIN, UserRole.HR]),
+        )
+    )
     hrs = hr_res.scalars().all()
     ns = NotificationService(db)
     
@@ -299,7 +345,11 @@ async def list_leaves(
     db: AsyncSession = Depends(get_db),
 ):
     """Employees see own leaves, HR/Admin see all."""
-    q = select(LeaveRequest).order_by(LeaveRequest.created_at.desc())
+    q = (
+        select(LeaveRequest)
+        .where(LeaveRequest.tenant_id == current_user.tenant_id)
+        .order_by(LeaveRequest.created_at.desc())
+    )
     if current_user.role not in (UserRole.ADMIN, UserRole.OWNER, UserRole.HR):
         q = q.where(LeaveRequest.user_id == current_user.id)
         
@@ -316,7 +366,12 @@ async def approve_leave(
     if current_user.role not in (UserRole.ADMIN, UserRole.OWNER, UserRole.HR):
         raise HTTPException(status_code=403, detail="Access denied")
         
-    leave = await db.scalar(select(LeaveRequest).where(LeaveRequest.id == id))
+    leave = await db.scalar(
+        select(LeaveRequest).where(
+            LeaveRequest.id == id,
+            LeaveRequest.tenant_id == current_user.tenant_id,
+        )
+    )
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
         
@@ -347,7 +402,12 @@ async def reject_leave(
     if current_user.role not in (UserRole.ADMIN, UserRole.OWNER, UserRole.HR):
         raise HTTPException(status_code=403, detail="Access denied")
         
-    leave = await db.scalar(select(LeaveRequest).where(LeaveRequest.id == id))
+    leave = await db.scalar(
+        select(LeaveRequest).where(
+            LeaveRequest.id == id,
+            LeaveRequest.tenant_id == current_user.tenant_id,
+        )
+    )
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
         

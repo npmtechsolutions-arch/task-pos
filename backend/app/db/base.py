@@ -26,29 +26,3 @@ class Base(DeclarativeBase):
             column.name: getattr(self, column.name)
             for column in self.__table__.columns
         }
-
-
-# Register all models for Alembic autogenerate
-from app.models.tenant import Tenant
-from app.models.user import User
-from app.models.project import Project, ProjectMember, ProjectPhase, ProjectPrdFile
-from app.models.task import (
-    Task, Tag, KanbanLabel, TaskDependency, TaskComment,
-    TimeEntry, TaskAssignment, TaskActivity
-)
-from app.models.org_team import OrgTeam, OrgTeamMember, ReportingStructure
-from app.models.employee import SkillCategory, Skill, UserSkill
-from app.models.board import Board, BoardColumn, BoardSwimlane
-from app.models.milestone import Milestone
-from app.models.timesheet import Timesheet, TimesheetEntry
-from app.models.hr_hierarchy import Department, HRAssignment, HRCustomRole
-from app.models.rbac import Role, Permission, RolePermission, UserRole as RBACUserRole
-from app.models.landing import (
-    LandingNavbar, LandingHero, LandingStat, LandingFeature,
-    LandingTestimonial, LandingBadge, PricingTier, PricingFeature,
-    FooterCategory, FooterLink, LandingAbout, LandingStep,
-    LandingCTA, LandingContact, LandingLead
-)
-from app.models.document import Document, TaskFile
-from app.models.attendance import Attendance
-from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage

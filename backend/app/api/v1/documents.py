@@ -6,7 +6,7 @@ import tempfile
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Form
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -77,7 +77,7 @@ class TaskFileResponse(BaseModel):
 @router.post("/upload-prd", response_model=PRDUploadResponse)
 async def upload_prd(
     file: UploadFile = File(...),
-    project_id: str = None,
+    project_id: str = Form(None),
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -109,14 +109,16 @@ async def upload_prd(
         if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+    project_id_val = project_id if project_id else None
+
     # 4. Store document record
     doc = Document(
         tenant_id=current_user.tenant_id,
-        project_id=project_id,
+        project_id=project_id_val,
         uploaded_by=current_user.id,
         file_name=file.filename or "prd_document.txt",
         file_url=f"/uploads/prd/{uuid.uuid4()}{suffix}",  # Placeholder URL
-        file_type=content_type,
+        file_type=content_type[:50],
         file_size_bytes=len(contents),
         extracted_text=parsed.get("extracted_text", "")[:5000],
         extracted_project_name=parsed.get("project_name"),
@@ -241,7 +243,7 @@ async def upload_task_file(
         uploaded_by=current_user.id,
         file_name=file.filename or "attachment",
         file_url=file_url,
-        file_type=content_type,
+        file_type=content_type[:100],
         file_size_bytes=len(contents),
     )
     db.add(task_file)
