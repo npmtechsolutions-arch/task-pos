@@ -51,6 +51,9 @@ class ProjectUpdate(BaseModel):
     visibility: Optional[ProjectVisibility] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    budget: Optional[float] = None
+    department: Optional[str] = Field(None, max_length=100)
+    business_unit: Optional[str] = Field(None, max_length=100)
     github_url: Optional[str] = Field(None, max_length=500)
     settings: Optional[dict] = None
     custom_fields: Optional[dict] = None

@@ -12,6 +12,8 @@ async def check():
     print('userrole:', [r[0] for r in r2])
     r3 = await conn.fetch("SELECT unnest(enum_range(NULL::projectstatus))")
     print('projectstatus:', [r[0] for r in r3])
+    r4 = await conn.fetch("SELECT unnest(enum_range(NULL::notificationtype))")
+    print('notificationtype:', [r[0] for r in r4])
     await conn.close()
 
 asyncio.run(check())

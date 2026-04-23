@@ -79,10 +79,12 @@ export function ProjectDetailsPage() {
     if (!projectId) return;
     setSaving(true); setError('');
     try {
-      await axios.patch(`${API_URL}/projects/${projectId}`, {
+      await axios.put(`${API_URL}/projects/${projectId}`, {
         name: fields.name,
         description: fields.description,
         budget: fields.budget ? parseFloat(fields.budget) : undefined,
+        department: fields.department || undefined,
+        business_unit: fields.business_unit || undefined,
       }, { headers: authHeader() });
       setIsEditing(false);
       fetchProjectById(projectId);

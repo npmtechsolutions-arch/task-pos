@@ -109,6 +109,11 @@ __all__ = [
     # Analytics & Reporting Module
     "SavedReport", "ReportSchedule", "ReportArchive", "DashboardConfig",
     "ReportFrequency", "ExportFormat", "RetentionTier",
+    # HR & Tenant & Calendar & Document
+    "Tenant", "TenantStatus",
+    "Candidate", "Intern", "LeaveRequest", "ApprovalStatus", "InternStatus",
+    "CalendarEvent", "CalendarEventType",
+    "Document", "TaskFile", "DocumentStatus",
 ]
 
 # ── Analytics & Reporting Module ────────────────────────────────────
@@ -121,3 +126,8 @@ from app.models.analytics import (  # noqa: E402
     RetentionTier,
     SavedReport,
 )
+
+from app.models.tenant import Tenant, TenantStatus
+from app.models.hr_records import Candidate, Intern, LeaveRequest, ApprovalStatus, InternStatus
+from app.models.calendar import CalendarEvent, CalendarEventType
+from app.models.document import Document, TaskFile, DocumentStatus

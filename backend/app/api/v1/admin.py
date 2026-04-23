@@ -241,16 +241,31 @@ async def admin_stats(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin dashboard stats: user counts by role."""
+    """Admin dashboard stats: user counts by role (system & custom)."""
     require_admin(current_user)
+    
+    # 1. System Role Counts (Owner, Admin, Member, etc.)
     role_counts_result = await db.execute(
         select(User.role, func.count(User.id)).group_by(User.role)
     )
-    role_counts = {str(row[0]).split('.')[-1]: row[1] for row in role_counts_result.all()}
+    role_counts = {str(row[0]).split('.')[-1].lower(): row[1] for row in role_counts_result.all()}
+    
+    # 2. Custom Role Counts (RBAC - Developer, Designer, etc.)
+    from app.models.rbac import Role, UserRole as RBACUserRole
+    custom_role_counts_res = await db.execute(
+        select(Role.name, func.count(RBACUserRole.id))
+        .join(RBACUserRole, Role.id == RBACUserRole.role_id)
+        .group_by(Role.name)
+    )
+    custom_role_counts = {row[0]: row[1] for row in custom_role_counts_res.all()}
+    
     total_result = await db.execute(select(func.count(User.id)))
     active_result = await db.execute(select(func.count(User.id)).where(User.is_active == True))
+    
     return {
         "total_users": total_result.scalar() or 0,
         "active_users": active_result.scalar() or 0,
-        "by_role": role_counts,
+        "by_system_role": role_counts,
+        "by_custom_role": custom_role_counts,
+        "by_role": {**role_counts, **custom_role_counts}  # Compatibility
     }

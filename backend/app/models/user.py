@@ -25,6 +25,7 @@ class UserRole(str, PyEnum):
     MANAGER = "manager"
     MEMBER = "member"
     VIEWER = "viewer"
+    HR = "hr"
 
 
 class UserStatus(str, PyEnum):

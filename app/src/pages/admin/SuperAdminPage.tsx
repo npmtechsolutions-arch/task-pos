@@ -417,19 +417,35 @@ export function SuperAdminPage() {
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {[
-              { label: 'Total Users', value: stats.total_users, color: 'text-indigo-600' },
-              { label: 'Active Users', value: stats.active_users, color: 'text-green-600' },
-              { label: 'Admins', value: stats.by_role?.admin ?? 0, color: 'text-red-600' },
-              { label: 'Members', value: stats.by_role?.member ?? 0, color: 'text-blue-600' },
-            ].map(s => (
-              <div key={s.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {[
+                { label: 'Total Users', value: stats.total_users, color: 'text-indigo-600' },
+                { label: 'Active Users', value: stats.active_users, color: 'text-green-600' },
+                { label: 'Admins', value: stats.by_role?.admin ?? 0, color: 'text-red-600' },
+                { label: 'Members', value: stats.by_role?.member ?? 0, color: 'text-blue-600' },
+              ].map(s => (
+                <div key={s.label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                  <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                  <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {stats.by_custom_role && Object.keys(stats.by_custom_role).length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wider">Department Allocation (By Role)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {Object.entries(stats.by_custom_role).map(([name, count]: [string, any]) => (
+                    <div key={name} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm border-l-4 border-l-indigo-500">
+                      <div className="text-xl font-bold text-gray-900">{count}</div>
+                      <div className="text-[10px] text-gray-500 uppercase font-medium mt-1 truncate" title={name}>{name}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {activeTab === 'users' ? (

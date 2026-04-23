@@ -94,17 +94,40 @@ async def list_departments(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """List departments, unified with Custom Roles."""
+    # 1. Fetch real departments
     if _can_see_all(current_user):
-        result = await db.execute(select(Department).order_by(Department.name))
-        return [DepartmentResponse.model_validate(d) for d in result.scalars().all()]
-    # Otherwise show depts where this user is a member
-    result = await db.execute(
-        select(Department)
-        .join(HRAssignment, Department.id == HRAssignment.department_id)
-        .where(HRAssignment.user_id == current_user.id)
-        .order_by(Department.name)
-    )
-    return [DepartmentResponse.model_validate(d) for d in result.scalars().all()]
+        dept_result = await db.execute(select(Department).order_by(Department.name))
+        depts = list(dept_result.scalars().all())
+    else:
+        dept_result = await db.execute(
+            select(Department)
+            .join(HRAssignment, Department.id == HRAssignment.department_id)
+            .where(HRAssignment.user_id == current_user.id)
+            .order_by(Department.name)
+        )
+        depts = list(dept_result.scalars().all())
+
+    # 2. Fetch Custom Roles to use as departments (Jira-level)
+    from app.models.rbac import Role as RBACRole
+    role_result = await db.execute(select(RBACRole).where(RBACRole.is_active == True))
+    roles = role_result.scalars().all()
+
+    # 3. Combine them
+    results = [DepartmentResponse.model_validate(d) for d in depts]
+    for r in roles:
+        # Avoid duplication if a department already has the same name
+        if not any(d.name.lower() == r.name.lower() for d in results):
+            results.append(
+                DepartmentResponse(
+                    id=r.id,
+                    name=r.name,
+                    description=r.description or f"Department driven by {r.name} role",
+                    created_at=r.created_at,
+                )
+            )
+    
+    return results
 
 
 @router.post("/departments", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
@@ -411,6 +434,9 @@ class UserResponseHR(BaseModel):
     status: UserStatus
     tenant_id: str
     created_at: datetime
+    department: Optional[str] = None
+    custom_role: Optional[str] = None
+    title: Optional[str] = None
 
 
 @router.post("/users", response_model=UserResponseHR, status_code=status.HTTP_201_CREATED)
@@ -467,17 +493,50 @@ async def list_tenant_users(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all users in the current tenant."""
-    q = select(User).where(User.tenant_id == current_user.tenant_id)
+    """List all users in the current tenant with linked department/role data."""
+    from app.models.employee import EmployeeProfile
+    from app.models.rbac import Role, UserRole as RBACUserRole
+    
+    # Select user and join with profile
+    q = (
+        select(User, EmployeeProfile.department, EmployeeProfile.title)
+        .outerjoin(EmployeeProfile, User.id == EmployeeProfile.user_id)
+        .where(User.tenant_id == current_user.tenant_id)
+    )
+    
     if search:
         q = q.where(
             (User.first_name.ilike(f"%{search}%")) |
             (User.last_name.ilike(f"%{search}%")) |
             (User.email.ilike(f"%{search}%"))
         )
+    
     q = q.order_by(User.first_name)
     result = await db.execute(q)
-    return [UserResponseHR.model_validate(u) for u in result.scalars().all()]
+    rows = result.all()
+    
+    final_users = []
+    for user_obj, dept, title in rows:
+        # Fetch their primary custom role (Jira-level department)
+        role_q = (
+            select(Role.name)
+            .join(RBACUserRole, Role.id == RBACUserRole.role_id)
+            .where(RBACUserRole.user_id == user_obj.id)
+            .limit(1)
+        )
+        role_res = await db.execute(role_q)
+        custom_role = role_res.scalar_one_or_none()
+        
+        # Mapping: if explicit department is missing, use custom role
+        effective_dept = dept or custom_role
+        
+        user_data = UserResponseHR.model_validate(user_obj)
+        user_data.department = effective_dept
+        user_data.custom_role = custom_role
+        user_data.title = title
+        final_users.append(user_data)
+        
+    return final_users
 
 
 @router.put("/users/{user_id}", response_model=UserResponseHR)
