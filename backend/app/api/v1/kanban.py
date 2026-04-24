@@ -987,7 +987,7 @@ async def get_task_activity(
             user={"id": a.user.id, "full_name": a.user.full_name, "avatar_url": a.user.avatar_url},
             action=a.action,
             description=a.description,
-            metadata=a.metadata or {},
+            metadata=a.activity_metadata or {},
             created_at=a.created_at,
         )
         for a in logs

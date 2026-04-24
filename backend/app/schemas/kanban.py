@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices
 
 from app.models.task import ActivityAction, TaskPriority, TaskStatus, TaskType
 
@@ -116,7 +116,7 @@ class TaskActivityResponse(BaseModel):
     user: ActivityUserResponse
     action: ActivityAction
     description: str
-    metadata: dict
+    metadata: dict = Field(default_factory=dict, validation_alias=AliasChoices('activity_metadata', 'metadata'))
     created_at: datetime
 
 

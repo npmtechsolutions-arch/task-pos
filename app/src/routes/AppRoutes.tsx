@@ -37,7 +37,8 @@ import PRDUploadPage from '@/pages/documents/PRDUploadPage';
 import AttendancePage from '@/pages/timesheets/AttendancePage';
 // Chat
 import ChatPage from '@/pages/chat/ChatPage';
-
+// Settings
+import { SettingsPage } from '@/pages/settings/SettingsPage';
 
 // ─── Protected Route ──────────────────────────────────────────────────────
 // If not authenticated, redirects to /login (not landing)
@@ -221,10 +222,7 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<div className="p-6 text-gray-500">Settings coming soon...</div>} />
-        <Route path="profile" element={<div className="p-6 text-gray-500">Profile Settings coming soon...</div>} />
-        <Route path="organization" element={<div className="p-6 text-gray-500">Organization Settings coming soon...</div>} />
-        <Route path="notifications" element={<div className="p-6 text-gray-500">Notification Settings coming soon...</div>} />
+        <Route index element={<SettingsPage />} />
       </Route>
 
       {/* Catch-all → back to landing */}

@@ -108,7 +108,7 @@ class NotificationService:
             project_id=notification_data.project_id,
             task_id=notification_data.task_id,
             comment_id=notification_data.comment_id,
-            metadata=notification_data.metadata or {},
+            extra_data=notification_data.extra_data or {},
             dedupe_key=notification_data.dedupe_key,
             channels=[ch.value for ch in notification_data.channels],
             action_url=notification_data.action_url,

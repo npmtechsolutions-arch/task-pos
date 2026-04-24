@@ -31,6 +31,7 @@ from app.api.v1.attendance import router as attendance_router
 from app.api.v1.export import router as export_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.hr_records import router as hr_records_router
+from app.api.v1.support import router as support_router
 
 api_router = APIRouter()
 
@@ -75,3 +76,4 @@ api_router.include_router(attendance_router, prefix="/attendance", tags=["attend
 api_router.include_router(export_router, prefix="/export", tags=["export"])
 api_router.include_router(chat_router, prefix="/chat", tags=["chat"])
 api_router.include_router(hr_records_router, prefix="/hr-records", tags=["hr_records"])
+api_router.include_router(support_router, prefix="/support", tags=["support"])

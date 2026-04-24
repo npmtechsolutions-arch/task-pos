@@ -76,6 +76,15 @@ from app.schemas.landing import (
     LeadCaptureCreate,
     LandingLeadResponse,
 )
+from app.schemas.support import (
+    TicketCreate,
+    TicketUpdate,
+    TicketResponse,
+    TicketDetailResponse,
+    TicketListResponse,
+    TicketMessageCreate,
+    TicketMessageResponse,
+)
 
 __all__ = [
     # User schemas
@@ -148,4 +157,12 @@ __all__ = [
     "LandingContentResponse",
     "LeadCaptureCreate",
     "LandingLeadResponse",
+    # Support schemas
+    "TicketCreate",
+    "TicketUpdate",
+    "TicketResponse",
+    "TicketDetailResponse",
+    "TicketListResponse",
+    "TicketMessageCreate",
+    "TicketMessageResponse",
 ]

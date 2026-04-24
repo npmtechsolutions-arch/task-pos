@@ -243,7 +243,7 @@ class TaskFilterParams(BaseModel):
     due_after: Optional[datetime] = None
     tag_ids: Optional[List[str]] = None
     page: int = Field(default=1, ge=1)
-    per_page: int = Field(default=20, ge=1, le=100)
+    per_page: int = Field(default=20, ge=1, le=200)
     sort_by: str = "created_at"
     sort_order: str = "desc"
 

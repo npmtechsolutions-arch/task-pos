@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices
 
 from app.models.notification import NotificationChannel, NotificationType
 
@@ -25,7 +25,7 @@ class NotificationCreate(NotificationBase):
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     comment_id: Optional[str] = None
-    metadata: dict = {}
+    extra_data: dict = Field(default_factory=dict, validation_alias=AliasChoices('extra_data', 'metadata'))
     channels: List[NotificationChannel] = [NotificationChannel.IN_APP]
     action_url: Optional[str] = None
 
@@ -42,7 +42,7 @@ class NotificationResponse(NotificationBase):
     project_id: Optional[str] = None
     task_id: Optional[str] = None
     comment_id: Optional[str] = None
-    metadata: dict
+    metadata: dict = Field(default_factory=dict, validation_alias=AliasChoices('extra_data', 'metadata'))
     channels: List[str]
     is_read: bool
     read_at: Optional[datetime] = None

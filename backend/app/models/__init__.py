@@ -114,6 +114,8 @@ __all__ = [
     "Candidate", "Intern", "LeaveRequest", "ApprovalStatus", "InternStatus",
     "CalendarEvent", "CalendarEventType",
     "Document", "TaskFile", "DocumentStatus",
+    # Support System
+    "Ticket", "TicketStatus", "TicketPriority", "TicketCategory", "TicketMessage",
 ]
 
 # ── Analytics & Reporting Module ────────────────────────────────────
@@ -131,3 +133,12 @@ from app.models.tenant import Tenant, TenantStatus
 from app.models.hr_records import Candidate, Intern, LeaveRequest, ApprovalStatus, InternStatus
 from app.models.calendar import CalendarEvent, CalendarEventType
 from app.models.document import Document, TaskFile, DocumentStatus
+
+# ── Support System Module ───────────────────────────────────────────
+from app.models.support import (
+    Ticket,
+    TicketCategory,
+    TicketMessage,
+    TicketPriority,
+    TicketStatus,
+)
