@@ -71,9 +71,21 @@ class Ticket(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     
-    status: Mapped[TicketStatus] = mapped_column(default=TicketStatus.OPEN, index=True)
-    priority: Mapped[TicketPriority] = mapped_column(default=TicketPriority.MEDIUM, index=True)
-    category: Mapped[TicketCategory] = mapped_column(default=TicketCategory.OTHER, index=True)
+    status: Mapped[TicketStatus] = mapped_column(
+        Enum(TicketStatus, native_enum=True, name="ticket_status_enum"),
+        default=TicketStatus.OPEN,
+        index=True
+    )
+    priority: Mapped[TicketPriority] = mapped_column(
+        Enum(TicketPriority, native_enum=True, name="ticket_priority_enum"),
+        default=TicketPriority.MEDIUM,
+        index=True
+    )
+    category: Mapped[TicketCategory] = mapped_column(
+        Enum(TicketCategory, native_enum=True, name="ticket_category_enum"),
+        default=TicketCategory.OTHER,
+        index=True
+    )
     
     created_by_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=False, index=True

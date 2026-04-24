@@ -88,8 +88,9 @@ async def get_my_tasks(
 
     if is_admin:
         # Super Admin → return all tasks (no status filter unless specified)
+        # Note: We filter by tenant_id of the current_user to keep it scoped to their org
         from app.schemas.task import TaskFilterParams
-        filters = TaskFilterParams(status=status, per_page=200)
+        filters = TaskFilterParams(status=status, per_page=200, tenant_id=current_user.tenant_id)
         tasks, _ = await task_service.list_tasks(filters=filters)
     else:
         tasks = await task_service.get_user_tasks(

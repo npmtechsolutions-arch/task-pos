@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Integer, Float
+from sqlalchemy import DateTime, ForeignKey, String, Text, Integer, Float, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -42,7 +42,10 @@ class Candidate(Base):
     role: Mapped[str] = mapped_column(String(100), nullable=False)  # UserRole mapping
     resume_url: Mapped[Optional[str]] = mapped_column(Text)
     
-    status: Mapped[ApprovalStatus] = mapped_column(default=ApprovalStatus.PENDING)
+    status: Mapped[ApprovalStatus] = mapped_column(
+        Enum(ApprovalStatus, native_enum=True, name="approval_status_enum"),
+        default=ApprovalStatus.PENDING
+    )
     
     # Track who did what
     created_by_id: Mapped[str] = mapped_column(
@@ -82,7 +85,10 @@ class Intern(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     
-    status: Mapped[InternStatus] = mapped_column(default=InternStatus.ACTIVE)
+    status: Mapped[InternStatus] = mapped_column(
+        Enum(InternStatus, native_enum=True, name="intern_status_enum"),
+        default=InternStatus.ACTIVE
+    )
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

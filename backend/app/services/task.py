@@ -16,6 +16,7 @@ from app.models.task import (
     TaskPriority,
     TaskStatus,
     TimeEntry,
+    TaskAssignment,
 )
 from app.schemas.task import (
     TaskBatchUpdateRequest,
@@ -127,8 +128,14 @@ class TaskService:
         tenant_id: Optional[str] = None,
         status: Optional[TaskStatus] = None,
     ) -> List[Task]:
-        """Get tasks assigned to user."""
-        query = select(Task).where(Task.primary_assignee_id == user_id)
+        """Get tasks assigned to user (either primary or additional)."""
+        # Select tasks where user is primary assignee OR exists in task_assignments table
+        query = select(Task).outerjoin(TaskAssignment).where(
+            or_(
+                Task.primary_assignee_id == user_id,
+                TaskAssignment.user_id == user_id
+            )
+        )
         if tenant_id:
             query = query.where(Task.tenant_id == tenant_id)
 
@@ -138,7 +145,7 @@ class TaskService:
             # Default to non-completed tasks
             query = query.where(Task.status != TaskStatus.DONE)
 
-        query = query.order_by(Task.due_date.asc().nullslast())
+        query = query.order_by(Task.due_date.asc().nullslast()).distinct()
 
         result = await self.db.execute(query)
         return result.scalars().all()

@@ -47,28 +47,28 @@ export function SettingsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-5xl mx-auto p-8">
+      <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50">
+        <div className={`${activeTab === 'support' ? 'max-w-full' : 'max-w-5xl'} mx-auto p-8 transition-all duration-500`}>
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               {SETTINGS_TABS.find(t => t.id === activeTab)?.label}
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-base text-slate-500 dark:text-slate-400 mt-1 font-medium">
               Manage your workspace configuration and preferences.
             </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-            {activeTab === 'support' ? (
+          {activeTab === 'support' ? (
+            <div className="anim-fade-in">
               <SupportTicketSystem />
-            ) : (
-              <div className="p-12 text-center text-slate-500">
-                <Sliders className="w-12 h-12 mx-auto mb-4 text-slate-400 opacity-50" />
-                <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">Coming Soon</h3>
-                <p>The {SETTINGS_TABS.find(t => t.id === activeTab)?.label} module is currently under development.</p>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden p-12 text-center text-slate-500 anim-fade-in">
+              <Sliders className="w-12 h-12 mx-auto mb-4 text-slate-400 opacity-50" />
+              <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">Coming Soon</h3>
+              <p>The {SETTINGS_TABS.find(t => t.id === activeTab)?.label} module is currently under development.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
