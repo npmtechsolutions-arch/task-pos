@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
-  AlertCircle, Box, CheckCircle2, ArrowLeft, Send, Shield, User as UserIcon
+  AlertCircle, Box, CheckCircle2, ArrowLeft, Send, Shield, User as UserIcon, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Ticket, TicketMessage } from '@/api/support';
@@ -13,21 +13,21 @@ import { useTicketWebSocket } from '@/hooks/useTicketWebSocket';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const STATUS_OPTIONS = [
-  { value: 'open', label: 'Open' },
-  { value: 'assigned', label: 'Assigned' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'waiting_for_user', label: 'Waiting For User' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
+  { value: 'OPEN', label: 'Open' },
+  { value: 'ASSIGNED', label: 'Assigned' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'WAITING_FOR_USER', label: 'Waiting for User' },
+  { value: 'RESOLVED', label: 'Resolved' },
+  { value: 'CLOSED', label: 'Closed' }
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  open: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  assigned: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400',
-  in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
-  waiting_for_user: 'bg-orange-100 text-orange-700',
-  resolved: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
-  closed: 'bg-slate-100 text-slate-600',
+  OPEN: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  ASSIGNED: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400',
+  IN_PROGRESS: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  WAITING_FOR_USER: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  RESOLVED: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+  CLOSED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 };
 
 function formatTime(iso: string) {
@@ -233,9 +233,9 @@ export const TicketDetailLive = memo(({
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
-              {currentStatus !== 'resolved' && currentStatus !== 'closed' && (
+              {currentStatus !== 'RESOLVED' && currentStatus !== 'CLOSED' && (
                 <button
-                  onClick={() => onStatusChange(ticket.id, 'resolved')}
+                  onClick={() => onStatusChange(ticket.id, 'RESOLVED')}
                   className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold border border-green-200 text-green-700 bg-green-50 rounded-xl hover:bg-green-100 dark:border-green-500/30 dark:text-green-400 dark:bg-green-500/10 transition-all active:scale-95"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />

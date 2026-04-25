@@ -6,8 +6,8 @@ import { AlertCircle, MessageSquare, Send, X } from 'lucide-react';
 
 const ticketSchema = z.object({
   title: z.string().min(5, 'Subject must be at least 5 characters').max(200, 'Subject is too long'),
-  category: z.enum(['bug', 'feature', 'performance', 'account', 'other']),
-  priority: z.enum(['low', 'medium', 'high', 'critical']),
+  category: z.enum(['BUG', 'FEATURE', 'PERFORMANCE', 'ACCOUNT', 'OTHER']),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   description: z.string().min(20, 'Please provide more details (min 20 characters)').max(5000, 'Description is too long'),
 });
 
@@ -26,8 +26,8 @@ export const TicketCreateForm = memo(({ onSubmit, onCancel }: TicketCreateFormPr
   } = useForm<TicketFormData>({
     resolver: zodResolver(ticketSchema),
     defaultValues: {
-      category: 'bug',
-      priority: 'medium',
+      category: 'BUG',
+      priority: 'MEDIUM',
     }
   });
 
@@ -80,11 +80,11 @@ export const TicketCreateForm = memo(({ onSubmit, onCancel }: TicketCreateFormPr
                     {...register('category')}
                     className="w-full px-4 py-3 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer shadow-sm group-hover:border-slate-300 dark:group-hover:border-slate-700"
                   >
-                    <option value="bug">Bug / Error</option>
-                    <option value="feature">Feature Request</option>
-                    <option value="performance">Performance Issue</option>
-                    <option value="account">Account Issue</option>
-                    <option value="other">Other</option>
+                    <option value="BUG">Bug / Error</option>
+                    <option value="FEATURE">Feature Request</option>
+                    <option value="PERFORMANCE">Performance Issue</option>
+                    <option value="ACCOUNT">Account Issue</option>
+                    <option value="OTHER">Other</option>
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-slate-600 transition-colors">
                     <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
@@ -101,10 +101,10 @@ export const TicketCreateForm = memo(({ onSubmit, onCancel }: TicketCreateFormPr
                     {...register('priority')}
                     className="w-full px-4 py-3 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer shadow-sm group-hover:border-slate-300 dark:group-hover:border-slate-700"
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="CRITICAL">Critical</option>
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-slate-600 transition-colors">
                     <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>

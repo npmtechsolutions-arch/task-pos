@@ -25,29 +25,29 @@ if TYPE_CHECKING:
 
 class TicketStatus(str, PyEnum):
     """Ticket status enumeration."""
-    OPEN = "open"
-    ASSIGNED = "assigned"
-    IN_PROGRESS = "in_progress"
-    WAITING_FOR_USER = "waiting_for_user"
-    RESOLVED = "resolved"
-    CLOSED = "closed"
+    OPEN = "OPEN"
+    ASSIGNED = "ASSIGNED"
+    IN_PROGRESS = "IN_PROGRESS"
+    WAITING_FOR_USER = "WAITING_FOR_USER"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
 
 
 class TicketPriority(str, PyEnum):
     """Ticket priority enumeration."""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
 
 
 class TicketCategory(str, PyEnum):
     """Ticket category enumeration."""
-    BUG = "bug"
-    FEATURE = "feature"
-    PERFORMANCE = "performance"
-    ACCOUNT = "account"
-    OTHER = "other"
+    BUG = "BUG"
+    FEATURE = "FEATURE"
+    PERFORMANCE = "PERFORMANCE"
+    ACCOUNT = "ACCOUNT"
+    OTHER = "OTHER"
 
 
 class Ticket(Base):
@@ -72,17 +72,17 @@ class Ticket(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     
     status: Mapped[TicketStatus] = mapped_column(
-        Enum(TicketStatus, native_enum=True, name="ticket_status_enum"),
+        Enum(TicketStatus, native_enum=False, name="ticket_status_enum"),
         default=TicketStatus.OPEN,
         index=True
     )
     priority: Mapped[TicketPriority] = mapped_column(
-        Enum(TicketPriority, native_enum=True, name="ticket_priority_enum"),
+        Enum(TicketPriority, native_enum=False, name="ticket_priority_enum"),
         default=TicketPriority.MEDIUM,
         index=True
     )
     category: Mapped[TicketCategory] = mapped_column(
-        Enum(TicketCategory, native_enum=True, name="ticket_category_enum"),
+        Enum(TicketCategory, native_enum=False, name="ticket_category_enum"),
         default=TicketCategory.OTHER,
         index=True
     )

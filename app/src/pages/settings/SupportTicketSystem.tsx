@@ -28,19 +28,19 @@ const TicketDetail = lazy(() =>
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_COLORS: Record<string, string> = {
-  open: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  assigned: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400',
-  in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
-  waiting_for_user: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
-  resolved: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
-  closed: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+  OPEN: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
+  ASSIGNED: 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400',
+  IN_PROGRESS: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
+  WAITING_FOR_USER: 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
+  RESOLVED: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
+  CLOSED: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'text-blue-500',
-  medium: 'text-amber-500',
-  high: 'text-orange-500',
-  critical: 'text-red-500',
+  LOW: 'text-blue-500',
+  MEDIUM: 'text-amber-500',
+  HIGH: 'text-orange-500',
+  CRITICAL: 'text-red-500',
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -237,10 +237,10 @@ export function SupportTicketSystem() {
                 className="text-xs px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All Status</option>
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="CLOSED">Closed</option>
               </select>
               <select
                 value={filterPriority}
@@ -248,10 +248,10 @@ export function SupportTicketSystem() {
                 className="text-xs px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">All Priority</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+                <option value="LOW">Low</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="HIGH">High</option>
+                <option value="CRITICAL">Critical</option>
               </select>
             </div>
           )}

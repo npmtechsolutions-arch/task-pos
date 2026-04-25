@@ -31,7 +31,7 @@ from app.models.task import (
     TimeEntry,
 )
 from app.models.task_workflow import TaskWorkflow, TaskWorkflowState
-from app.models.timesheet import Timesheet, TimesheetEntry, TimesheetStatus
+from app.models.timesheet import Timesheet, TimesheetEntry, TimesheetStatus, ActivityType
 from app.models.user import User, UserRole, UserStatus
 from app.models.workflow import (
     WorkflowStage,
@@ -92,7 +92,7 @@ __all__ = [
     "TaskDependency", "DependencyType", "ActivityAction",
     "Tag", "KanbanLabel", "TimeEntry",
     "TaskWorkflow", "TaskWorkflowState",
-    "Timesheet", "TimesheetEntry", "TimesheetStatus",
+    "Timesheet", "TimesheetEntry", "TimesheetStatus", "ActivityType",
     "Board", "BoardColumn", "BoardSwimlane",
     "Milestone", "MilestoneType", "MilestoneStatus", "MilestoneRisk",
     "WorkflowTemplate", "WorkflowStage", "WorkflowTransition", "WorkflowTemplateType",

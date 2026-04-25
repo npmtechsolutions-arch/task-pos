@@ -306,11 +306,17 @@ class Task(Base):
     @property
     def assignee_ids(self) -> List[str]:
         """List of active assignee IDs."""
+        from sqlalchemy.orm.attributes import instance_state
+        if 'assignments' not in instance_state(self).dict:
+            return []
         return [a.user_id for a in self.assignments]
 
     @property
     def assignees(self) -> List["User"]:
         """List of assigned User objects."""
+        from sqlalchemy.orm.attributes import instance_state
+        if 'assignments' not in instance_state(self).dict:
+            return []
         return [a.user for a in self.assignments]
 
     @property
@@ -323,6 +329,10 @@ class Task(Base):
     @property
     def progress_percentage(self) -> float:
         """Calculate task progress based on subtasks."""
+        from sqlalchemy.orm.attributes import instance_state
+        if 'subtasks' not in instance_state(self).dict:
+            return 100.0 if self.status == TaskStatus.DONE else 0.0
+            
         if not self.subtasks:
             return 100.0 if self.status == TaskStatus.DONE else 0.0
         completed = sum(1 for s in self.subtasks if s.status == TaskStatus.DONE)

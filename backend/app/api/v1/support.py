@@ -47,7 +47,7 @@ async def create_ticket(
 
         admin_query = select(User).where(
             User.tenant_id == current_user.tenant_id,
-            User.role.in_([UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OWNER]),
+            User.role.in_([UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER]),
             User.is_active == True,
         )
         admin_result = await db.execute(admin_query)
@@ -85,7 +85,7 @@ async def list_tickets(
     support_service = SupportService(db)
 
     is_admin = getattr(current_user, "role", None) in (
-        UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OWNER
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER
     )
 
     # Non-admins can only see their own tickets
@@ -152,7 +152,7 @@ async def get_ticket(
 
     # Non-admins can only see their own tickets
     is_admin = getattr(current_user, "role", None) in (
-        UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OWNER
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER
     )
     if not is_admin and ticket.created_by_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -169,7 +169,7 @@ async def update_ticket(
 ) -> TicketResponse:
     """Update ticket. Status changes are admin-only."""
     is_admin = getattr(current_user, "role", None) in (
-        UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OWNER
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER
     )
 
     if update_data.status and not is_admin:
@@ -240,7 +240,7 @@ async def add_message(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     is_admin = getattr(current_user, "role", None) in (
-        UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OWNER
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER
     )
 
     # Broadcast via WebSocket to all users in this ticket's room
@@ -312,7 +312,7 @@ async def get_messages(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     is_admin = getattr(current_user, "role", None) in (
-        UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.OWNER
+        UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER
     )
     if not is_admin and ticket.created_by_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
