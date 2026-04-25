@@ -14,7 +14,7 @@ const ticketSchema = z.object({
 type TicketFormData = z.infer<typeof ticketSchema>;
 
 interface TicketCreateFormProps {
-  onSubmit: (data: TicketFormData) => void;
+  onSubmit: (data: TicketFormData) => Promise<void>;
   onCancel: () => void;
 }
 
