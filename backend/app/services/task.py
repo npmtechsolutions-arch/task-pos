@@ -127,6 +127,7 @@ class TaskService:
         user_id: str,
         tenant_id: Optional[str] = None,
         status: Optional[TaskStatus] = None,
+        include_done: bool = True,
     ) -> List[Task]:
         """Get tasks assigned to user (either primary or additional)."""
         # Select tasks where user is primary assignee OR exists in task_assignments table
@@ -141,9 +142,9 @@ class TaskService:
 
         if status:
             query = query.where(Task.status == status)
-        else:
-            # Default to non-completed tasks
-            query = query.where(Task.status != TaskStatus.DONE)
+        elif not include_done:
+            # Optionally exclude done/cancelled for dashboard summary views
+            query = query.where(Task.status.not_in([TaskStatus.DONE, TaskStatus.CANCELLED]))
 
         query = query.order_by(Task.due_date.asc().nullslast()).distinct()
 
@@ -271,9 +272,11 @@ class TaskService:
 
         update_data = task_data.model_dump(exclude_unset=True)
 
-        # Handle status change
+        # Track changes for notifications
         old_status = task.status
         new_status = update_data.get("status")
+        old_assignee = task.primary_assignee_id
+        new_assignee = update_data.get("primary_assignee_id")
 
         for field, value in update_data.items():
             if field == "tag_ids":
@@ -302,15 +305,181 @@ class TaskService:
         # Update project metrics
         await self.project_service.update_metrics(task.project_id)
 
-        # Trigger real-time dashboard update
-        dashboard_service = DashboardService(self.db)
-        if task.primary_assignee_id:
-            await dashboard_service.broadcast_dashboard_update(task.primary_assignee_id)
-        if task.reporter_id != task.primary_assignee_id:
-            await dashboard_service.broadcast_dashboard_update(task.reporter_id)
+        # ── Send in-app notification for New Assignee ──────────────────────
+        if new_assignee and new_assignee != old_assignee:
+            try:
+                from app.services.notification import NotificationService
+                from app.schemas.notification import NotificationCreate
+                from app.models.notification import NotificationType
+                
+                notif_service = NotificationService(self.db)
+                notif = await notif_service.notify_task_assigned(
+                    user_id=new_assignee,
+                    task_id=task.id,
+                    task_title=task.title,
+                    project_id=task.project_id,
+                    project_name="",
+                    assigned_by_name="A project member",
+                )
+                from app.websocket.manager import manager
+                await manager.send_to_user(new_assignee, {
+                    "type": "notification",
+                    "data": {
+                        "id": notif.id,
+                        "notification_type": notif.notification_type.value if hasattr(notif.notification_type, 'value') else str(notif.notification_type),
+                        "title": notif.title,
+                        "message": notif.message,
+                        "action_url": notif.action_url,
+                        "is_read": False,
+                        "created_at": notif.created_at.isoformat(),
+                    }
+                })
+            except Exception as e:
+                logger.warning("Reassignment notification failed (non-critical)", error=str(e))
 
-        logger.info("Task updated", task_id=task_id)
+        # ── Broadcast real-time task.updated event (drives auto-refresh on Kanban + Reports) ──
+        try:
+            from app.websocket.manager import manager
+            ws_event = {
+                "type": "task.updated",
+                "data": {
+                    "task_id": task_id,
+                    "project_id": task.project_id,
+                    "old_status": old_status.value if hasattr(old_status, "value") else str(old_status),
+                    "new_status": new_status.value if hasattr(new_status, "value") else str(new_status) if new_status else None,
+                    "title": task.title,
+                }
+            }
+            # Notify assignee
+            if task.primary_assignee_id:
+                await manager.send_to_user(task.primary_assignee_id, ws_event)
+            # Notify reporter if different
+            if task.reporter_id and task.reporter_id != task.primary_assignee_id:
+                await manager.send_to_user(task.reporter_id, ws_event)
+        except Exception as e:
+            logger.warning("WebSocket task.updated broadcast failed (non-critical)", error=str(e))
+
+        # ── Send in-app notification on status change ──────────────────────────
+        if new_status and new_status != old_status and task.primary_assignee_id:
+            try:
+                from app.services.notification import NotificationService
+                from app.schemas.notification import NotificationCreate
+                from app.models.notification import NotificationType
+
+                status_label = (
+                    new_status.value.replace("_", " ").title()
+                    if hasattr(new_status, "value")
+                    else str(new_status).replace("_", " ").title()
+                )
+                notif_service = NotificationService(self.db)
+                notif = await notif_service.create(
+                    NotificationCreate(
+                        user_id=task.primary_assignee_id,
+                        dedupe_key=f"task_status:{task_id}:{str(new_status)}",
+                        notification_type=NotificationType.TASK_STATUS_CHANGED,
+                        title="Task status updated",
+                        message=f"'{task.title}' was moved to {status_label}",
+                        task_id=task_id,
+                        project_id=task.project_id,
+                        action_url=f"/tasks/{task_id}",
+                    )
+                )
+                # Push notification over WebSocket immediately
+                from app.websocket.manager import manager
+                await manager.send_to_user(task.primary_assignee_id, {
+                    "type": "notification",
+                    "data": {
+                        "id": notif.id,
+                        "title": notif.title,
+                        "message": notif.message,
+                        "action_url": notif.action_url,
+                        "is_read": False,
+                        "created_at": notif.created_at.isoformat(),
+                    }
+                })
+            except Exception as e:
+                logger.warning("Status-change notification failed (non-critical)", error=str(e))
+
+        # ── Auto-rollup: Task → Milestone → Phase → Project ───────────────────
+        if new_status and new_status != old_status:
+            await self._rollup_after_task_change(task)
+
+        logger.info("Task updated", task_id=task_id, old_status=str(old_status), new_status=str(new_status))
         return await self.get_with_details(task.id)
+
+    async def _rollup_after_task_change(self, task: "Task") -> None:
+        """
+        Auto-propagate progress upward:
+          Task DONE → check Milestone → update Phase progress → update Project progress
+        """
+        try:
+            from app.models.milestone import Milestone, MilestoneStatus
+            from app.models.project import ProjectPhase
+
+            # ── Step 1: Milestone rollup ──────────────────────────────────────
+            if task.milestone_id:
+                ms_result = await self.db.execute(
+                    select(Milestone).where(Milestone.id == task.milestone_id)
+                )
+                milestone = ms_result.scalar_one_or_none()
+                if milestone:
+                    # Get all tasks linked to this milestone
+                    ms_tasks_result = await self.db.execute(
+                        select(Task).where(Task.milestone_id == milestone.id)
+                    )
+                    ms_tasks = ms_tasks_result.scalars().all()
+                    total = len(ms_tasks)
+                    done = sum(1 for t in ms_tasks if str(t.status).split(".")[-1].lower() in ("done", "completed"))
+
+                    completion = round((done / total * 100), 1) if total else 0.0
+                    milestone.completion_percentage = completion
+
+                    if total > 0 and done == total:
+                        milestone.status = MilestoneStatus.COMPLETED
+                        logger.info("Milestone auto-completed", milestone_id=milestone.id)
+
+                    await self.db.commit()
+
+            # ── Step 2: Phase rollup ──────────────────────────────────────────
+            if task.phase_id:
+                phase_result = await self.db.execute(
+                    select(ProjectPhase).where(ProjectPhase.id == task.phase_id)
+                )
+                phase = phase_result.scalar_one_or_none()
+                if phase:
+                    phase_tasks_result = await self.db.execute(
+                        select(Task).where(Task.phase_id == phase.id)
+                    )
+                    phase_tasks = phase_tasks_result.scalars().all()
+                    total = len(phase_tasks)
+                    if total:
+                        done_count = sum(
+                            1 for t in phase_tasks
+                            if str(t.status).split(".")[-1].lower() in ("done", "completed")
+                        )
+                        phase.progress_percentage = round(done_count / total * 100, 1)
+                        if done_count == total:
+                            from app.models.project import PhaseStatus
+                            phase.status = PhaseStatus.COMPLETED
+                        await self.db.commit()
+                        logger.info(
+                            "Phase progress updated",
+                            phase_id=phase.id,
+                            progress=phase.progress_percentage,
+                        )
+
+            # ── Step 3: Project rollup (already handled by update_metrics) ───
+            await self.project_service.update_metrics(task.project_id)
+
+            # ── Step 4: Real-time dashboard push ─────────────────────────────
+            dashboard_service = DashboardService(self.db)
+            if task.primary_assignee_id:
+                await dashboard_service.broadcast_dashboard_update(task.primary_assignee_id)
+            if task.reporter_id and task.reporter_id != task.primary_assignee_id:
+                await dashboard_service.broadcast_dashboard_update(task.reporter_id)
+
+        except Exception as e:
+            logger.warning("Rollup after task change failed (non-critical)", error=str(e))
 
     async def batch_update(self, update_data: TaskBatchUpdateRequest) -> int:
         """Batch update multiple tasks."""

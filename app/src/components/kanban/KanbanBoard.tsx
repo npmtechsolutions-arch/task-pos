@@ -7,6 +7,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  MeasuringStrategy,
   type DragStartEvent,
   type DragEndEvent,
   type DropAnimation,
@@ -17,6 +18,7 @@ import { Search, SlidersHorizontal, Users, AlertTriangle, Loader2, RefreshCw, X 
 import { KanbanColumn } from './KanbanColumn';
 import { KanbanCard } from './KanbanCard';
 import { useKanbanStore, type SwimlaneMode, type WipMode } from '@/stores/kanbanStore';
+import { subscribeToTaskEvents } from '@/hooks/useWebSocket';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +59,29 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
       fetchBoard(projectId);
     }
   }, [projectId]);
+
+  // ── Real-time Kanban sync via shared WebSocket ───────────────────────────────
+  useEffect(() => {
+    if (!projectId) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsubscribe = subscribeToTaskEvents((msg) => {
+      if (
+        (msg.type === 'task.updated' || msg.type === 'task.created') &&
+        msg.data?.project_id === projectId
+      ) {
+        // Debounce: re-fetch board 800ms after last update
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => fetchBoard(projectId), 800);
+      }
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [projectId, fetchBoard]);
+
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -119,7 +144,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.4' } } }),
   };
 
-  const filteredColumns = useMemo(() => getFilteredColumns(), [columns, filters]);
+  const filteredColumns = useMemo(() => getFilteredColumns(), [columns, filters, getFilteredColumns]);
   const hasActiveFilters = filters.search || filters.priority || filters.assigneeId || filters.labelId;
 
   if (!projectId) {
@@ -241,6 +266,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >

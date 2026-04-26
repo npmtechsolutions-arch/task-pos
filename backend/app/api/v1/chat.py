@@ -380,23 +380,46 @@ async def send_message(
         mentions=data.mentions or [],
     )
     db.add(msg)
-
-    # Create notifications for mentioned users
-    for uid in (data.mentions or []):
-        if uid != current_user.id:
-            sender_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
-            await _create_notification(
-                db, uid,
-                title=f"@{sender_name} mentioned you",
-                message=data.content[:100],
-                ntype=NotificationType.TASK_MENTIONED,
-                link_url=f"/chat/rooms/{room_id}",
-            )
-
     await db.commit()
     await db.refresh(msg)
 
-    sender_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip()
+    sender_name = f"{current_user.first_name or ''} {current_user.last_name or ''}".strip() or "Someone"
+
+    # ── Fetch all room members once ──────────────────────────────────────────
+    mem_rows = await db.execute(
+        select(ChatRoomMember.user_id).where(ChatRoomMember.room_id == room_id)
+    )
+    all_member_ids = [r[0] for r in mem_rows.fetchall()]
+
+    # ── In-app notifications via NotificationService (deduped + WS bell) ────
+    from app.services.notification import NotificationService
+    from app.schemas.notification import NotificationCreate
+    from app.models.notification import NotificationType as NT
+
+    notif_service = NotificationService(db)
+    mention_set = set(data.mentions or [])
+    preview = data.content[:80] + ("…" if len(data.content) > 80 else "")
+
+    for uid in all_member_ids:
+        if uid == current_user.id:
+            continue  # Don't notify sender
+        is_mention = uid in mention_set
+        try:
+            await notif_service.create(
+                NotificationCreate(
+                    user_id=uid,
+                    # dedupe_key scoped to this exact message so it's idempotent
+                    dedupe_key=f"chat:{msg.id}:{uid}",
+                    notification_type=NT.TASK_MENTIONED if is_mention else NT.MESSAGE,
+                    title=f"@{sender_name} mentioned you" if is_mention else f"💬 {sender_name}",
+                    message=preview,
+                    action_url=f"/chat?room={room_id}",
+                )
+            )
+        except Exception:
+            pass  # Non-critical; WS broadcast below still delivers the message
+
+    # ── Broadcast real-time chat message to all room members ─────────────────
     msg_resp = MessageResponse(
         id=msg.id, room_id=msg.room_id, sender_id=msg.sender_id,
         sender_name=sender_name, sender_avatar=None,
@@ -405,21 +428,11 @@ async def send_message(
         reply_to_id=msg.reply_to_id, is_edited=msg.is_edited, is_deleted=msg.is_deleted,
         mentions=msg.mentions, created_at=msg.created_at, updated_at=msg.updated_at,
     )
-
     try:
         from app.websocket.manager import manager
-
-        mem_rows = await db.execute(
-            select(ChatRoomMember.user_id).where(ChatRoomMember.room_id == room_id)
-        )
-        user_ids = [r[0] for r in mem_rows.fetchall()]
         await manager.broadcast_to_users(
-            user_ids,
-            {
-                "type": "chat_message",
-                "room_id": room_id,
-                "message": msg_resp.model_dump(mode="json"),
-            },
+            all_member_ids,
+            {"type": "chat_message", "room_id": room_id, "message": msg_resp.model_dump(mode="json")},
         )
     except Exception:
         pass

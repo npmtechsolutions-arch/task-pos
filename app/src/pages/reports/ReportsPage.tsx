@@ -20,6 +20,7 @@ import {
   BarChart2, Layers, Award, AlertTriangle, RefreshCw, Download, Zap,
   Calendar, FolderOpen, Activity,
 } from 'lucide-react';
+import { subscribeToTaskEvents } from '@/hooks/useWebSocket';
 import './reports.css';
 
 // ── Token helper (matches authStore key) ──────────────────────────────────────
@@ -181,6 +182,22 @@ export function ReportsPage() {
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
+  // ── Real-time auto-refresh via shared WebSocket ─────────────────────────────
+  useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => setRefreshKey(k => k + 1), 1500);
+    };
+
+    const unsubscribe = subscribeToTaskEvents(scheduleRefresh);
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, []);
+
   const ph  = kpis?.project_health;
   const tt  = kpis?.task_throughput;
 
@@ -290,9 +307,21 @@ export function ReportsPage() {
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="rp-header">
         <div>
-          <h1 className="rp-title">Analytics &amp; Reports</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 className="rp-title">Analytics &amp; Reports</h1>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              fontSize: '11px', fontWeight: 700, color: '#10b981',
+              background: '#ecfdf5', border: '1px solid #a7f3d0',
+              borderRadius: '999px', padding: '2px 10px',
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', animation: 'pulse 2s infinite', display: 'inline-block' }} />
+              LIVE
+            </span>
+          </div>
           <p className="rp-subtitle">
             Real-time project intelligence · {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            {!loading && <span style={{ marginLeft: 8, opacity: 0.6 }}>· Updated {new Date().toLocaleTimeString()}</span>}
           </p>
         </div>
         <div className="rp-header-actions">

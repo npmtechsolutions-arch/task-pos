@@ -34,9 +34,20 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all, checkfirst=True)
         logger.info("Database tables created/verified")
 
+    # ── Start background scheduler (overdue/reminder/cleanup jobs) ──────────
+    from app.services.jobs import start_scheduler
+    _scheduler = start_scheduler()
+
     yield
 
     logger.info("Shutting down")
+    # Gracefully stop scheduler
+    if _scheduler is not None:
+        try:
+            _scheduler.shutdown(wait=False)
+            logger.info("Scheduler stopped")
+        except Exception:
+            pass
     from app.db.session import engine as _engine
     await _engine.dispose()
 

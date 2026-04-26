@@ -16,6 +16,7 @@ import { addProjectMembersBulk, downloadProjectPrd } from '@/api/projects';
 import { PhasesPanel } from '@/components/projects/PhasesPanel';
 import { MilestonesPanel } from '@/components/projects/MilestonesPanel';
 import { CriticalPathView } from '@/components/projects/CriticalPathView';
+import { GanttView } from '@/components/projects/GanttView';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +25,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-type Tab = 'overview' | 'phases' | 'milestones' | 'critical-path' | 'team' | 'settings';
+type Tab = 'overview' | 'gantt' | 'phases' | 'milestones' | 'critical-path' | 'team' | 'settings';
 
 const LIFECYCLE_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
   draft:     { bg: 'bg-gray-100',    text: 'text-gray-600',   icon: <Clock className="w-3 h-3" /> },
@@ -142,6 +143,7 @@ export function ProjectDetail() {
 
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'overview',      label: 'Overview',      icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'gantt',         label: 'Gantt',          icon: <Calendar className="w-4 h-4" /> },
     { id: 'phases',        label: 'Phases',         icon: <Flag className="w-4 h-4" /> },
     { id: 'milestones',    label: 'Milestones',     icon: <Target className="w-4 h-4" /> },
     { id: 'critical-path', label: 'Critical Path',  icon: <GitBranch className="w-4 h-4" /> },
@@ -305,6 +307,9 @@ export function ProjectDetail() {
               downloadProjectPrd(project.id, project.prdFile.fileName)
             }
           />
+        )}
+        {activeTab === 'gantt' && (
+          <GanttView projectId={project.id} />
         )}
         {activeTab === 'phases' && (
           <PhasesPanel projectId={project.id} />

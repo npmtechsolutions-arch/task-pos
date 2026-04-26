@@ -11,9 +11,19 @@ interface UseWebSocketOptions {
   enabled?: boolean;
 }
 
+// Global task-event dispatcher — Kanban/Reports subscribe to this
+type TaskEventHandler = (event: { type: string; data: any }) => void;
+const taskEventListeners = new Set<TaskEventHandler>();
+
+export function subscribeToTaskEvents(handler: TaskEventHandler) {
+  taskEventListeners.add(handler);
+  return () => taskEventListeners.delete(handler);
+}
+
 /**
  * Connects to the backend WebSocket at /ws/{userId}?token=<jwt>
  * Listens for notification events and pushes them to the notification store.
+ * Also dispatches task.updated / task.created events to subscribers (Kanban, Reports).
  * Automatically reconnects on disconnect (exponential back-off, max 30s).
  */
 export function useWebSocket({ userId, token, enabled = true }: UseWebSocketOptions) {
@@ -45,10 +55,23 @@ export function useWebSocket({ userId, token, enabled = true }: UseWebSocketOpti
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+
+          // ── Notification events → push to notification store ────────────
           if ((msg.type === 'notification' || msg.type === 'NEW_NOTIFICATION') && msg.data) {
             useNotificationStore.getState().pushNotification(msg.data);
           }
-          // Future: handle 'dashboard_update', 'typing', etc.
+
+          // ── Task lifecycle events → dispatch to all subscribers ─────────
+          if (
+            msg.type === 'task.updated' ||
+            msg.type === 'task.created' ||
+            msg.type === 'task.completed' ||
+            msg.type === 'dashboard_update'
+          ) {
+            taskEventListeners.forEach((handler) => {
+              try { handler(msg); } catch { /* ignore handler errors */ }
+            });
+          }
         } catch {
           // Ignore malformed messages
         }

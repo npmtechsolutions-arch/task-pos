@@ -287,8 +287,13 @@ export function TasksList() {
 
   useEffect(() => {
     if (!user?.id) return;
-    if (isAdmin && adminView === 'all') fetchTasks({});
-    else fetchMyTasks();
+    // Always fetch ALL tasks from DB (including completed) so they survive logout/login
+    if (isAdmin && adminView === 'all') {
+      fetchTasks({});
+    } else {
+      // fetchMyTasks now returns all statuses including DONE
+      fetchMyTasks();
+    }
     if (projects.length === 0) fetchProjects();
   }, [user?.id, adminView]);
 
