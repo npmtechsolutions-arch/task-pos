@@ -1,7 +1,7 @@
 """Calendar API — DB-backed events + task/milestone overlays."""
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,6 +15,21 @@ from app.models.task import Task
 from app.models.milestone import Milestone, MilestoneStatus
 
 router = APIRouter()
+
+
+def _strip_tz(dt: datetime | None) -> datetime | None:
+    """Convert any timezone-aware datetime to a naive UTC datetime.
+
+    PostgreSQL TIMESTAMP WITHOUT TIME ZONE columns only accept naive datetimes.
+    Pydantic parses ISO-8601 strings with +00:00/Z as aware datetimes, causing
+    SQLAlchemy/asyncpg DataError: 'can\'t subtract offset-naive and offset-aware datetimes'.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        # Convert to UTC then drop tzinfo
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -176,8 +191,8 @@ async def create_event(
         id=str(uuid.uuid4()),
         title=data.title,
         description=data.description,
-        start_date=data.start_date,
-        end_date=data.end_date,
+        start_date=_strip_tz(data.start_date),
+        end_date=_strip_tz(data.end_date),
         event_type=data.event_type,
         project_id=data.project_id,
         color=data.color,
@@ -205,7 +220,11 @@ async def update_event(
         from app.models.user import UserRole
         if current_user.role not in (UserRole.ADMIN, UserRole.OWNER):
             raise HTTPException(403, "Can only edit your own events")
-    for key, val in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    for key, val in update_data.items():
+        # Strip timezone from any datetime fields before saving
+        if isinstance(val, datetime):
+            val = _strip_tz(val)
         setattr(ev, key, val)
     await db.commit()
     await db.refresh(ev)

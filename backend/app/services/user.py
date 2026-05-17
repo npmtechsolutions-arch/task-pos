@@ -38,28 +38,43 @@ class UserService:
         limit: int = 100,
         search: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        skip_count: bool = False,
     ) -> tuple[List[User], int]:
-        """Get active users with optional search (tenant-scoped when tenant_id is set)."""
+        """Get active users with optional search (tenant-scoped when tenant_id is set).
+
+        Performance notes:
+        - skip_count=True skips the COUNT query (used by /search which doesn't need total).
+        - Search uses prefix-match (term%) on names for B-tree index friendliness,
+          and ILIKE %term% only on email (usually short lists, so still fast).
+        """
         conditions = [User.is_active == True]
         if tenant_id:
             conditions.append(User.tenant_id == tenant_id)
         if search:
             term = search.strip()
+            # Prefix match on names (B-tree friendly) + substring on email
             conditions.append(
                 or_(
-                    User.first_name.ilike(f"%{term}%"),
-                    User.last_name.ilike(f"%{term}%"),
+                    User.first_name.ilike(f"{term}%"),
+                    User.last_name.ilike(f"{term}%"),
                     User.email.ilike(f"%{term}%"),
+                    func.concat(User.first_name, ' ', User.last_name).ilike(f"{term}%"),
                 )
             )
 
         where_clause = and_(*conditions)
-        total = (await self.db.execute(select(func.count(User.id)).where(where_clause))).scalar() or 0
+
+        if skip_count:
+            total = 0  # caller doesn't need this
+        else:
+            total = (await self.db.execute(
+                select(func.count(User.id)).where(where_clause)
+            )).scalar() or 0
 
         query = (
             select(User)
             .where(where_clause)
-            .order_by(User.email)
+            .order_by(User.first_name, User.last_name)
             .offset(skip)
             .limit(limit)
         )

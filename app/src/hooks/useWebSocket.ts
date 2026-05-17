@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useKanbanStore } from '@/stores/kanbanStore';
+import { getQueryClient } from '@/lib/queryClient';
 
 const WS_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1')
   .replace(/^http/, 'ws')
@@ -56,21 +58,53 @@ export function useWebSocket({ userId, token, enabled = true }: UseWebSocketOpti
         try {
           const msg = JSON.parse(event.data);
 
-          // ── Notification events → push to notification store ────────────
+          // ── Notification events → push to Zustand store + bust RQ cache ───
           if ((msg.type === 'notification' || msg.type === 'NEW_NOTIFICATION') && msg.data) {
             useNotificationStore.getState().pushNotification(msg.data);
+            // Immediately invalidate React Query unread-count cache
+            try {
+              getQueryClient().invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+            } catch { /* safe to ignore */ }
           }
 
-          // ── Task lifecycle events → dispatch to all subscribers ─────────
+          // ── Task lifecycle events → dispatch to all subscribers ──────────
+          // TIMESTAMP GUARD: only forward if the incoming event is newer than
+          // what we already have locally. This prevents stale WS broadcasts
+          // (e.g. reconnect replays or delayed server events) from overwriting
+          // a recent optimistic Kanban move with old data.
           if (
             msg.type === 'task.updated' ||
             msg.type === 'task.created' ||
+            msg.type === 'task.moved' ||
             msg.type === 'task.completed' ||
             msg.type === 'dashboard_update'
           ) {
-            taskEventListeners.forEach((handler) => {
-              try { handler(msg); } catch { /* ignore handler errors */ }
-            });
+            const incomingUpdatedAt = msg.data?.updated_at
+              ? new Date(msg.data.updated_at).getTime()
+              : Infinity; // no timestamp → always forward (safe default)
+
+            // Pull the local task's updated_at from the Kanban store (synchronous)
+            let localUpdatedAt = 0;
+            if (msg.data?.id || msg.data?.task_id) {
+              const taskId = msg.data?.id || msg.data?.task_id;
+              try {
+                const { columns } = useKanbanStore.getState();
+                for (const col of columns) {
+                  const t = col.tasks.find((x) => x.id === taskId);
+                  if (t) {
+                    localUpdatedAt = new Date(t.updatedAt || 0).getTime();
+                    break;
+                  }
+                }
+              } catch { /* ignore — store not ready */ }
+            }
+
+            // Only dispatch if WS data is actually newer (or no local copy)
+            if (incomingUpdatedAt >= localUpdatedAt) {
+              taskEventListeners.forEach((handler) => {
+                try { handler(msg); } catch { /* ignore handler errors */ }
+              });
+            }
           }
         } catch {
           // Ignore malformed messages

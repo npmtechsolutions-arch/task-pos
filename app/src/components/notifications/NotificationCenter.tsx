@@ -50,7 +50,11 @@ function NotificationItem({ notification, onMarkAsRead, onDelete }: Notification
   const Icon = notificationIcons[notification.type];
   
   const getNotificationLink = () => {
-    const data = notification.data;
+    // If the backend provided a specific deep-link URL (like HR approvals), use it!
+    if ((notification as any).action_url) return (notification as any).action_url;
+    
+    // Otherwise fall back to data payload inference
+    const data = notification.data || {};
     if (data.taskId) return `/tasks/${data.taskId}`;
     if (data.projectId) return `/projects/${data.projectId}`;
     return '#';

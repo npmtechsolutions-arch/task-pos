@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn, formatDate, getProjectStatusColor } from '@/lib/utils';
 import { useProjectStore, useUIStore } from '@/stores';
+import { subscribeToTaskEvents } from '@/hooks/useWebSocket';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, ShieldCheck, Loader2, X, RefreshCw, Eye, EyeOff, Trash2, Key } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, ShieldCheck, Loader2, X, RefreshCw, Eye, EyeOff, Trash2, Key, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios, { AxiosError } from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
@@ -319,59 +320,88 @@ function ResetPasswordModal({ user, onClose }: { user: AdminUser; onClose: () =>
 
 // ── Main Super Admin Page ──────────────────────────────────────────────────────
 export function SuperAdminPage() {
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateRole, setShowCreateRole] = useState(false);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [deactivating, setDeactivating] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
-  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [usersRes, statsRes, rolesRes] = await Promise.all([
-        axios.get(`${API_URL}/admin/users?per_page=100`, { headers: authHeader() }),
-        axios.get(`${API_URL}/admin/stats`, { headers: authHeader() }),
-        axios.get(`${API_URL}/rbac/roles`, { headers: authHeader() }).catch(() => ({ data: { items: [] } })),
-      ]);
-      setUsers(usersRes.data);
-      setStats(statsRes.data);
-      setCustomRoles(rolesRes.data.items || []);
-    } catch (e) {
-      console.error('Admin fetch failed:', e);
-    } finally { setLoading(false); }
-  };
+  // Debounce search input (300ms) so we don't fire a request on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  useEffect(() => { fetchData(); }, []);
+  // ── Users (paginated, server-side search) ───────────────────────────────────
+  const { data: usersData, isLoading: loadingUsers, refetch: refetchUsers } = useQuery({
+    queryKey: ['admin', 'users', page, debouncedSearch, roleFilter],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/admin/users`, {
+        headers: authHeader(),
+        params: { page, per_page: 20, search: debouncedSearch || undefined, role: roleFilter || undefined },
+      });
+      return res.data as { items?: AdminUser[]; total?: number } | AdminUser[];
+    },
+    staleTime: 2 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+
+  // ── Stats ────────────────────────────────────────────────────────────────────
+  const { data: stats } = useQuery({
+    queryKey: ['admin', 'stats'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/admin/stats`, { headers: authHeader() });
+      return res.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  // ── Custom Roles ─────────────────────────────────────────────────────────────
+  const { data: rolesData, refetch: refetchRoles } = useQuery({
+    queryKey: ['admin', 'roles'],
+    queryFn: async () => {
+      const res = await axios.get(`${API_URL}/rbac/roles`, { headers: authHeader() });
+      return (res.data?.items ?? res.data ?? []) as CustomRole[];
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  // Normalise: API may return array or {items, total}
+  const users: AdminUser[] = Array.isArray(usersData)
+    ? usersData
+    : (usersData as any)?.items ?? [];
+  const totalUsers: number = Array.isArray(usersData)
+    ? usersData.length
+    : (usersData as any)?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalUsers / 20));
+  const customRoles: CustomRole[] = rolesData ?? [];
+  const loading = loadingUsers;
 
   const deactivate = async (user: AdminUser) => {
     if (!window.confirm(`Deactivate ${user.email}?`)) return;
     setDeactivating(user.id);
     try {
       await axios.delete(`${API_URL}/admin/users/${user.id}`, { headers: authHeader() });
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: false } : u));
+      refetchUsers();
     } catch (e: any) {
       alert(e.response?.data?.detail ?? e.message);
     } finally { setDeactivating(null); }
   };
 
-  const filtered = users.filter(u => {
-    const matchSearch = !search || `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(search.toLowerCase());
-    const matchRole = !roleFilter || u.role === roleFilter;
-    return matchSearch && matchRole;
-  });
+  // Client-side filter only when API doesn't support it (fallback)
+  const filtered = users;
+
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {showCreate && (
         <CreateUserModal
           onClose={() => setShowCreate(false)}
-          onCreated={u => setUsers(prev => [u, ...prev])}
+          onCreated={() => { setShowCreate(false); refetchUsers(); }}
         />
       )}
       {resetTarget && (

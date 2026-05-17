@@ -185,15 +185,15 @@ class Task(Base):
         String(36), ForeignKey("projects.id"), nullable=False, index=True
     )
     project: Mapped["Project"] = relationship(
-        "Project", back_populates="tasks", lazy="selectin"
+        "Project", back_populates="tasks", lazy="noload"  # Never needed on list; use project_id
     )
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="tasks")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="tasks", lazy="noload")
 
     phase_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("project_phases.id", ondelete="SET NULL"), index=True
     )
     phase: Mapped[Optional["ProjectPhase"]] = relationship(
-        "ProjectPhase", back_populates="tasks", lazy="selectin"
+        "ProjectPhase", back_populates="tasks", lazy="noload"  # Loaded only in detail view
     )
 
     # Parent/Subtask relationship
@@ -285,12 +285,12 @@ class Task(Base):
     comments: Mapped[List["TaskComment"]] = relationship(
         "TaskComment",
         back_populates="task",
-        lazy="selectin",
+        lazy="noload",   # Only loaded in get_with_details — avoids N+1 on list/board
         cascade="all, delete-orphan",
         order_by="TaskComment.created_at",
     )
     time_entries: Mapped[List["TimeEntry"]] = relationship(
-        "TimeEntry", back_populates="task", lazy="selectin", cascade="all, delete-orphan"
+        "TimeEntry", back_populates="task", lazy="noload", cascade="all, delete-orphan"
     )
     assignments: Mapped[List["TaskAssignment"]] = relationship(
         "TaskAssignment", back_populates="task", lazy="selectin", cascade="all, delete-orphan"
@@ -298,7 +298,7 @@ class Task(Base):
     activity_logs: Mapped[List["TaskActivity"]] = relationship(
         "TaskActivity",
         back_populates="task",
-        lazy="noload",   # Loaded on demand — avoids N+1 on board fetch
+        lazy="noload",
         cascade="all, delete-orphan",
         order_by="TaskActivity.created_at.desc()",
     )
@@ -386,12 +386,12 @@ class TaskActivity(Base):
     task_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("tasks.id"), nullable=False, index=True
     )
-    tenant_id: Mapped[str] = mapped_column(
+    tenant_id: Mapped[Optional[str]] = mapped_column(
         String(36),
         ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+        nullable=True,   # ← Was nullable=False — caused silent transaction rollback
+        index=True,      #   when _log_activity didn't pass tenant_id, reverting all
+    )                    #   kanban moves on DB level (card jumped back after refresh).
     task: Mapped["Task"] = relationship("Task", back_populates="activity_logs")
 
     user_id: Mapped[str] = mapped_column(

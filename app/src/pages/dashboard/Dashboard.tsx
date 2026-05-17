@@ -14,6 +14,7 @@ import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { MyTasksWidget } from '@/components/dashboard/MyTasksWidget';
 import { ProjectChart } from '@/components/dashboard/ProjectChart';
 import { TeamWidget } from '@/components/dashboard/TeamWidget';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export function Dashboard() {
   const { user } = useAuthStore();
@@ -72,7 +73,7 @@ export function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Welcome back, {user?.firstName}! 👋
+            Welcome back, {user?.firstName || user?.email?.split('@')[0] || 'there'}! 👋
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             Here&apos;s what&apos;s happening with your projects today.
@@ -85,34 +86,42 @@ export function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Projects"
-          value={currentStats.total_projects}
-          description={`${currentStats.active_projects} active`}
-          icon={FolderKanban}
-          color="blue"
-        />
-        <StatCard
-          title="My Tasks"
-          value={currentStats.my_tasks}
-          description={`${currentStats.my_tasks_completed} completed`}
-          icon={CheckSquare}
-          color="green"
-        />
-        <StatCard
-          title="Hours Logged"
-          value={`${currentStats.hours_logged}h`}
-          description={`${currentStats.hours_this_month}h this month`}
-          icon={Clock}
-          color="purple"
-        />
-        <StatCard
-          title="Team Members"
-          value={currentStats.team_members}
-          description="Across your projects"
-          icon={Users}
-          color="yellow"
-        />
+        <ErrorBoundary>
+          <StatCard
+            title="Total Projects"
+            value={currentStats.total_projects}
+            description={`${currentStats.active_projects} active`}
+            icon={FolderKanban}
+            color="blue"
+          />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <StatCard
+            title="My Tasks"
+            value={currentStats.my_tasks}
+            description={`${currentStats.my_tasks_completed} completed`}
+            icon={CheckSquare}
+            color="green"
+          />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <StatCard
+            title="Hours Logged"
+            value={`${currentStats.hours_logged}h`}
+            description={`${currentStats.hours_this_month}h this month`}
+            icon={Clock}
+            color="purple"
+          />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <StatCard
+            title="Team Members"
+            value={currentStats.team_members}
+            description="Across your projects"
+            icon={Users}
+            color="yellow"
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Main Content Grid */}
@@ -120,19 +129,27 @@ export function Dashboard() {
         {/* Left Column - 2/3 width */}
         <div className="lg:col-span-2 space-y-6">
           {/* Project Progress */}
-          <ProjectChart />
+          <ErrorBoundary>
+            <ProjectChart />
+          </ErrorBoundary>
 
           {/* Activity Feed */}
-          <ActivityFeed limit={5} />
+          <ErrorBoundary>
+            <ActivityFeed limit={5} />
+          </ErrorBoundary>
         </div>
 
         {/* Right Column - 1/3 width */}
         <div className="space-y-6">
           {/* My Tasks */}
-          <MyTasksWidget limit={5} />
+          <ErrorBoundary>
+            <MyTasksWidget limit={5} />
+          </ErrorBoundary>
 
           {/* Team Workload */}
-          <TeamWidget />
+          <ErrorBoundary>
+            <TeamWidget />
+          </ErrorBoundary>
 
           {/* Quick Stats */}
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">

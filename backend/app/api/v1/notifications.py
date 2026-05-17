@@ -52,17 +52,18 @@ async def get_unread_count(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Get unread notification count."""
-    notification_service = NotificationService(db)
-    _, _, unread_count = await notification_service.list_notifications(
-        user_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-        unread_only=True,
-        page=1,
-        per_page=1,
-    )
+    """Get unread notification count — single COUNT(*) query, no list fetch."""
+    from sqlalchemy import func, select as sa_select
+    from app.models.notification import Notification
 
-    return {"unread_count": unread_count}
+    result = await db.execute(
+        sa_select(func.count(Notification.id)).where(
+            Notification.user_id == current_user.id,
+            Notification.is_read == False,
+        )
+    )
+    count = result.scalar() or 0
+    return {"unread_count": count}
 
 
 @router.put("/read")

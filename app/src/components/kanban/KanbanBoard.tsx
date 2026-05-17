@@ -66,13 +66,42 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const unsubscribe = subscribeToTaskEvents((msg) => {
+      if (!msg.data || msg.data.project_id !== projectId) return;
+
+      // ── task.moved: apply instantly without a full board refetch ─────
+      // This gives other users an immediate card animation when someone drags.
+      if (msg.type === 'task.moved') {
+        const { id, task_id, board_column_id, source_column_id, position } = msg.data;
+        const taskId = id || task_id;
+        if (!taskId || !board_column_id) return;
+
+        // Skip if WE are the ones moving this task (avoid double-application)
+        if (useKanbanStore.getState().movingTaskIds.has(taskId)) return;
+
+        useKanbanStore.getState().applyRemoteMove(
+          taskId,
+          source_column_id,
+          board_column_id,
+          position ?? 0,
+          {
+            // Merge any extra task fields the server sent back
+            status: msg.data.status,
+            updatedAt: msg.data.updated_at,
+          },
+        );
+        return;
+      }
+
+      // ── task.updated / task.created: debounce a full board refresh ───
+      // Debounce: wait 1.5s after last event before refetching.
+      // Skip if a move is in-flight (movingTaskIds non-empty) to avoid
+      // overwriting the optimistic state.
       if (
         (msg.type === 'task.updated' || msg.type === 'task.created') &&
-        msg.data?.project_id === projectId
+        useKanbanStore.getState().movingTaskIds.size === 0
       ) {
-        // Debounce: re-fetch board 800ms after last update
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => fetchBoard(projectId), 800);
+        debounceTimer = setTimeout(() => fetchBoard(projectId), 1500);
       }
     });
 
@@ -81,6 +110,7 @@ export function KanbanBoard({ projectId }: KanbanBoardProps) {
       unsubscribe();
     };
   }, [projectId, fetchBoard]);
+
 
 
   const sensors = useSensors(

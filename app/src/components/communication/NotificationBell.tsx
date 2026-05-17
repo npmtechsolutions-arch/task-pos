@@ -34,7 +34,19 @@ const TYPE_ICON: Record<string, string> = {
   task_overdue: '🚨',
   project_invitation: '📧',
   system_announcement: '📢',
+  system_alert: '🔔',
+  // ── HR flows ──
+  candidate_submitted: '🧑‍💼',
+  candidate_approved:  '✅',
+  candidate_rejected:  '❌',
+  user_hired:          '🎉',
+  user_fired:          '⚠️',
+  hr_action:           '📋',
+  leave_requested:     '🏖️',
+  leave_approved:      '✅',
+  leave_rejected:      '❌',
 };
+
 
 export function NotificationBell() {
   const { token } = useAuthStore();

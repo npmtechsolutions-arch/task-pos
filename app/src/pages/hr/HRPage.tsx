@@ -250,6 +250,7 @@ function DepartmentModal({ onClose, onCreated }: { onClose: () => void; onCreate
 import { CandidatesTab } from './CandidatesTab';
 import { InternsTab } from './InternsTab';
 import { LeavesTab } from './LeavesTab';
+import { TerminationsTab } from './TerminationsTab';
 
 // ── Main HR Page ───────────────────────────────────────────────────────────────
 export function HRPage() {
@@ -258,7 +259,7 @@ export function HRPage() {
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [roleFilter, setRole]     = useState('all');
-  const [tab, setTab]             = useState<'users' | 'departments' | 'candidates' | 'interns' | 'leaves'>('users');
+  const [tab, setTab] = useState<'users' | 'departments' | 'candidates' | 'interns' | 'leaves' | 'terminations'>('users');
   const [showUserModal, setShowUserModal]   = useState(false);
   const [showDeptModal, setShowDeptModal]   = useState(false);
   const [editingUser, setEditingUser]       = useState<TenantUser | null>(null);
@@ -378,12 +379,15 @@ export function HRPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 w-fit flex-wrap">
-          {(['users', 'departments', 'candidates', 'interns', 'leaves'] as const).map(t => (
+          {(['users', 'departments', 'candidates', 'interns', 'terminations', 'leaves'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={cn('px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize',
                 tab === t ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700')}>
-              {t === 'users' ? `Users (${users.length})` : 
-               t === 'departments' ? `Departments (${departments.length})` : t}
+              {t === 'users' ? `Users (${users.length})` :
+               t === 'departments' ? `Departments (${departments.length})` :
+               t === 'candidates' ? '🟢 Hire' :
+               t === 'terminations' ? '🔴 Fire' :
+               t === 'interns' ? '🎓 Interns' : 'Leaves'}
             </button>
           ))}
         </div>
@@ -559,9 +563,10 @@ export function HRPage() {
         )}
 
         {/* Dynamic HR Records Tabs */}
-        {tab === 'candidates' && <CandidatesTab />}
-        {tab === 'interns' && <InternsTab />}
-        {tab === 'leaves' && <LeavesTab />}
+        {tab === 'candidates'   && <CandidatesTab />}
+        {tab === 'interns'      && <InternsTab />}
+        {tab === 'terminations' && <TerminationsTab users={users} />}
+        {tab === 'leaves'       && <LeavesTab />}
       </div>
     </div>
   );

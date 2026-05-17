@@ -51,8 +51,19 @@ class TaskService:
 
     async def get_with_details(self, task_id: str) -> Optional[Task]:
         """Get task with all details loaded."""
+        from sqlalchemy.orm import selectinload
         result = await self.db.execute(
-            select(Task).where(Task.id == task_id)
+            select(Task)
+            .options(
+                selectinload(Task.subtasks),
+                selectinload(Task.comments),
+                selectinload(Task.dependencies),
+                selectinload(Task.tags),
+                selectinload(Task.primary_assignee),
+                selectinload(Task.reporter),
+                selectinload(Task.assignees)
+            )
+            .where(Task.id == task_id)
         )
         return result.scalar_one_or_none()
 

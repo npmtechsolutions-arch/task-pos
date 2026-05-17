@@ -47,7 +47,9 @@ function TaskItem({ task, onToggle }: TaskItemProps) {
             title={`Priority: ${task.priority}`}
           />
           
-          <span className="text-xs text-gray-500">{task.project.key}-{task.taskNumber}</span>
+          <span className="text-xs text-gray-500">
+            {task.project?.key ? `${task.project.key}-${task.taskNumber}` : `#${task.taskNumber}`}
+          </span>
           
           {task.dueDate && (
             <div className={cn(

@@ -15,7 +15,6 @@ import {
   Clock,
   ShieldCheck,
   Kanban,
-  FileText,
   ClipboardList,
   MessageCircle,
 } from 'lucide-react';
@@ -47,7 +46,6 @@ const mainNavigation = [
   { name: 'Chat',       href: '/chat',       icon: MessageCircle },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
   { name: 'Attendance', href: '/attendance', icon: ClipboardList },
-  { name: 'PR Upload',  href: '/prd-upload', icon: FileText },
   { name: 'HR & Org',   href: '/hr',         icon: Users },
   { name: 'Calendar',   href: '/calendar',   icon: Calendar },
   { name: 'Reports',    href: '/reports',    icon: BarChart3 },

@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { PageErrorBoundary } from '@/components/ErrorBoundary';
 
 export function AppLayout() {
   const { user, token } = useAuthStore();
@@ -23,7 +24,9 @@ export function AppLayout() {
         
         <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900 relative pt-16">
           <div className="p-6 max-w-full">
-            <Outlet />
+            <PageErrorBoundary>
+              <Outlet />
+            </PageErrorBoundary>
           </div>
         </main>
       </div>

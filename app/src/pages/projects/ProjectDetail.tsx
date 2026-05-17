@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
@@ -17,6 +17,7 @@ import { PhasesPanel } from '@/components/projects/PhasesPanel';
 import { MilestonesPanel } from '@/components/projects/MilestonesPanel';
 import { CriticalPathView } from '@/components/projects/CriticalPathView';
 import { GanttView } from '@/components/projects/GanttView';
+import { subscribeToTaskEvents } from '@/hooks/useWebSocket';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 type Tab = 'overview' | 'gantt' | 'phases' | 'milestones' | 'critical-path' | 'team' | 'settings';
+
+
 
 const LIFECYCLE_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
   draft:     { bg: 'bg-gray-100',    text: 'text-gray-600',   icon: <Clock className="w-3 h-3" /> },
@@ -62,6 +65,25 @@ export function ProjectDetail() {
     // Always fetch fresh data from DB when landing on detail page
     fetchProjectById(projectId);
   }, [projectId]);
+
+  // ── Real-time: re-fetch project when tasks/phases/milestones change ──────
+  useEffect(() => {
+    if (!projectId) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeToTaskEvents((msg) => {
+      if (msg.data?.project_id !== projectId) return;
+      // Debounce: any task event for this project triggers a background refresh
+      // so progress bars, phase completion, and member counts stay current.
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fetchProjectById(projectId), 2000);
+    });
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [projectId]);
+
+
 
   const project = projects.find((p) => p.id === projectId) ?? currentProject;
 
@@ -513,6 +535,7 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [role, setRole] = useState('member');
   const [saving, setSaving] = useState(false);
@@ -525,29 +548,36 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  useEffect(() => {
-    setMembers(initialMembers);
-  }, [initialMembers]);
+  useEffect(() => { setMembers(initialMembers); }, [initialMembers]);
 
-  const runSearch = useMemo(
-    () =>
-      debounce((q: string) => {
-        if (!q.trim()) {
-          setSearchResults([]);
-          return;
-        }
-        axios
-          .get(`${API_URL}/users/search`, {
-            params: { q: q.trim(), limit: 15 },
-            headers: getAuthHeader(),
-          })
-          .then((res) => setSearchResults(res.data?.items ?? []))
-          .catch(() => setSearchResults([]));
-      }, 300),
-    [API_URL]
-  );
+  // ── DEBOUNCED LIVE SEARCH: fires 300ms after last keystroke ──
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) { setSearchResults([]); setIsSearching(false); return; }
+
+    setIsSearching(true);
+    const controller = new AbortController();
+    
+    const debounceTimer = setTimeout(() => {
+      axios
+        .get(`${API_URL}/users/search`, {
+          params: { q, limit: 15 },
+          headers: getAuthHeader(),
+          signal: controller.signal,
+        })
+        .then((res) => { setSearchResults(res.data?.items ?? []); setIsSearching(false); })
+        .catch((e) => { if (!axios.isCancel(e)) { setSearchResults([]); setIsSearching(false); } });
+    }, 300);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      controller.abort();
+    };
+  }, [searchQuery, API_URL]);
+
 
   const toggleSelect = (userId: string) => {
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(userId)) next.delete(userId);
@@ -615,15 +645,17 @@ function TeamPanel({ members: initialMembers, projectId }: { members: any[]; pro
               {modalError && <div className="text-sm text-red-600 bg-red-50 rounded-lg p-3">{modalError}</div>}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Search users</label>
-                <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  placeholder="Type name or email…"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSearchQuery(v);
-                    runSearch(v);
-                  }}
-                />
+                <div className="relative">
+                  <input autoFocus className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    placeholder="Type name or email…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {isSearching && (
+                    <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                  )}
+                </div>
+
                 {selectedIds.size > 0 && (
                   <p className="text-xs text-indigo-600 mt-1">{selectedIds.size} selected — add in one request</p>
                 )}

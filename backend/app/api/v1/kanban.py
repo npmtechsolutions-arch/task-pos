@@ -78,6 +78,7 @@ async def _log_activity(
     description: str,
     metadata: dict = None,
     project_id: str = None,
+    tenant_id: str = None,
 ) -> None:
     log = TaskActivity(
         task_id=task_id,
@@ -86,6 +87,7 @@ async def _log_activity(
         description=description,
         activity_metadata=metadata or {},
         project_id=project_id,
+        tenant_id=tenant_id or "",  # fallback to empty string to avoid NOT NULL error
     )
     db.add(log)
     # Note: caller must commit
@@ -522,16 +524,73 @@ async def move_kanban_task(
         db, task.id, current_user.id, ActivityAction.MOVED,
         f"Moved from '{old_col_name}' to '{target_col.name}'",
         {"from_column": old_col_name, "to_column": target_col.name},
+        project_id=task.project_id,
+        tenant_id=current_user.tenant_id,
     )
+
+    # Re-fetch with a FOR UPDATE lock to prevent concurrent move race conditions
+    result = await db.execute(
+        select(Task).where(Task.id == task_id).with_for_update()
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found after lock")
+
+    old_board_column_id = task.board_column_id
+    old_status = task.status
 
     task.board_column_id = move_data.target_column_id
     task.position = move_data.new_position
     task.status = new_status
     task.updated_at = datetime.utcnow()
 
+    logger.info(
+        "Kanban move — pre-commit",
+        task_id=task_id,
+        old_col=old_board_column_id,
+        new_col=move_data.target_column_id,
+        old_status=str(old_status),
+        new_status=str(new_status),
+    )
+
     await db.commit()
     await db.refresh(task)
-    return await _task_to_card(task, db)
+
+    logger.info(
+        "Kanban move — post-commit (persisted)",
+        task_id=task_id,
+        board_column_id=task.board_column_id,
+        status=str(task.status),
+        updated_at=str(task.updated_at),
+    )
+
+    card = await _task_to_card(task, db)
+
+    # Broadcast to all project members so their boards update instantly.
+    # The event carries updated_at so the frontend timestamp guard knows
+    # this is the authoritative state (newer than any optimistic local copy).
+    try:
+        from app.websocket.manager import manager
+        await manager.broadcast_to_project(task.project_id, {
+            "type": "task.moved",
+            "data": {
+                "id": task.id,
+                "task_id": task.id,
+                "project_id": task.project_id,
+                "board_column_id": task.board_column_id,
+                "status": task.status.value if hasattr(task.status, "value") else str(task.status),
+                "position": task.position,
+                "updated_at": task.updated_at.isoformat(),
+                "moved_by": current_user.id,
+                "target_column_id": move_data.target_column_id,
+                "source_column_id": move_data.source_column_id,
+            },
+        })
+    except Exception as ws_err:
+        logger.warning("Kanban move WS broadcast failed (non-critical)", error=str(ws_err))
+
+    return card
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

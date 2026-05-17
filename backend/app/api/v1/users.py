@@ -72,15 +72,16 @@ async def search_users_quick(
 ) -> UserListResponse:
     """Fast tenant-scoped user lookup for pickers (small limit, indexed-friendly ILIKE)."""
     user_service = UserService(db)
-    users, total = await user_service.get_active_users(
+    users, _ = await user_service.get_active_users(
         skip=0,
         limit=limit,
         search=q,
         tenant_id=current_user.tenant_id,
+        skip_count=True,   # no pagination needed for pickers — skip the COUNT query
     )
     return UserListResponse(
         items=[UserResponse.model_validate(u) for u in users],
-        total=total,
+        total=len(users),  # accurate enough for a picker dropdown
         page=1,
         per_page=limit,
     )

@@ -22,9 +22,13 @@ export interface SwimlaneGroup {
 // ─── Store State ─────────────────────────────────────────────────────────
 
 interface KanbanState {
+  currentProjectId: string | null;
   board: KanbanBoardView | null;
   columns: KanbanColumn[];
   isLoading: boolean;
+  /** Set of task IDs currently being moved (API in-flight). Does NOT
+   *  set isLoading so it won't block board renders or the WS refetch guard. */
+  movingTaskIds: Set<string>;
   error: string | null;
   filters: KanbanFilters;
   swimlaneMode: SwimlaneMode;
@@ -33,6 +37,8 @@ interface KanbanState {
   // Actions
   fetchBoard: (projectId: string) => Promise<void>;
   moveTask: (taskId: string, sourceColId: string, targetColId: string, newPosition: number) => Promise<void>;
+  /** Apply a move that came in via WebSocket from another user. */
+  applyRemoteMove: (taskId: string, sourceColId: string | undefined, targetColId: string, newPosition: number, serverCard?: Partial<KanbanTaskCard>) => void;
   quickAddTask: (columnId: string, title: string, projectId: string) => Promise<KanbanTaskCard | null>;
   deleteTask: (taskId: string) => Promise<void>;
   setFilters: (f: Partial<KanbanFilters>) => void;
@@ -50,12 +56,61 @@ interface KanbanState {
 
 const DEFAULT_FILTERS: KanbanFilters = { search: '', priority: '', assigneeId: '', labelId: '' };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+/** Move a task between/within columns in a column array. Pure, no mutation. */
+function applyMoveToColumns(
+  columns: KanbanColumn[],
+  taskId: string,
+  sourceColId: string | undefined,
+  targetColId: string,
+  newPosition: number,
+  patchTask?: Partial<KanbanTaskCard>,
+): KanbanColumn[] {
+  let movedTask: KanbanTaskCard | undefined;
+
+  // 1. Remove from source
+  const afterRemove = columns.map((col) => {
+    if (sourceColId ? col.id === sourceColId : col.tasks.some((t) => t.id === taskId)) {
+      movedTask = col.tasks.find((t) => t.id === taskId);
+      if (!movedTask) return col;
+      return {
+        ...col,
+        tasks: col.tasks.filter((t) => t.id !== taskId),
+        taskCount: Math.max(0, col.taskCount - 1),
+      };
+    }
+    return col;
+  });
+
+  if (!movedTask) return columns; // task not found — leave board unchanged
+
+  // 2. Build the updated task
+  const updatedTask: KanbanTaskCard = {
+    ...movedTask,
+    boardColumnId: targetColId,
+    position: newPosition,
+    ...(patchTask ?? {}),
+  };
+
+  // 3. Insert into target at the correct index
+  return afterRemove.map((col) => {
+    if (col.id !== targetColId) return col;
+    const tasks = [...col.tasks];
+    const clampedIdx = Math.min(Math.max(newPosition, 0), tasks.length);
+    tasks.splice(clampedIdx, 0, updatedTask);
+    return { ...col, tasks, taskCount: col.taskCount + 1 };
+  });
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────
 
 export const useKanbanStore = create<KanbanState>((set, get) => ({
+  currentProjectId: null,
   board: null,
   columns: [],
   isLoading: false,
+  movingTaskIds: new Set(),
   error: null,
   filters: DEFAULT_FILTERS,
   swimlaneMode: 'none',
@@ -63,58 +118,106 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
 
   // ── Fetch board from API ───────────────────────────────────────────────
   fetchBoard: async (projectId: string) => {
-    set({ isLoading: true, error: null });
+    const isNewProject = get().currentProjectId !== projectId;
+    set({
+      isLoading: true,
+      error: null,
+      currentProjectId: projectId,
+      // Only clear the board when switching to a completely new project
+      ...(isNewProject && { columns: [], board: null }),
+    });
+
     try {
       const board = await kanbanApi.getBoard(projectId);
-      set({ board, columns: board.columns, isLoading: false });
+      // Guard: ignore response if user navigated away
+      if (get().currentProjectId === projectId) {
+        set({ board, columns: board.columns, isLoading: false });
+      }
     } catch (err: any) {
-      set({
-        error: err.response?.data?.detail || 'Failed to fetch Kanban board',
-        isLoading: false,
-      });
+      if (get().currentProjectId === projectId) {
+        set({
+          error: err.response?.data?.detail || 'Failed to fetch Kanban board',
+          isLoading: false,
+        });
+      }
     }
   },
 
-  // ── Move task with optimistic update + rollback ────────────────────────
+  // ── Move task — optimistic + server sync, NO isLoading toggle ────────
   moveTask: async (taskId, sourceColId, targetColId, newPosition) => {
+    // Don't process if already moving this task (double-drag guard)
+    if (get().movingTaskIds.has(taskId)) return;
+
     // Snapshot for rollback
     const snapshot = get().columns;
 
-    // Optimistic: move card instantly
-    const { columns } = get();
-    let movedTask: KanbanTaskCard | undefined;
-    const afterRemove = columns.map((col) => {
-      if (col.id === sourceColId) {
-        movedTask = col.tasks.find((t) => t.id === taskId);
-        return { ...col, tasks: col.tasks.filter((t) => t.id !== taskId), taskCount: col.taskCount - 1 };
-      }
-      return col;
-    });
+    // Stamp optimistic updatedAt so the WS timestamp guard knows our local
+    // copy is current and blocks any stale broadcast from overwriting it.
+    const optimisticNow = new Date().toISOString();
 
-    if (!movedTask) return;
-    const taskCopy = { ...movedTask, boardColumnId: targetColId, position: newPosition };
+    // Optimistic update — instant, no isLoading toggle (avoids board re-render lag)
+    const optimisticColumns = applyMoveToColumns(
+      get().columns,
+      taskId,
+      sourceColId,
+      targetColId,
+      newPosition,
+      { updatedAt: optimisticNow },
+    );
 
-    const afterInsert = afterRemove.map((col) => {
-      if (col.id === targetColId) {
-        const tasks = [...col.tasks];
-        // Insert at correct position
-        const insertIdx = tasks.findIndex((t) => t.position >= newPosition);
-        if (insertIdx === -1) tasks.push(taskCopy);
-        else tasks.splice(insertIdx, 0, taskCopy);
-        return { ...col, tasks, taskCount: col.taskCount + 1 };
-      }
-      return col;
-    });
-
-    set({ columns: afterInsert });
+    set((state) => ({
+      columns: optimisticColumns,
+      movingTaskIds: new Set([...state.movingTaskIds, taskId]),
+    }));
 
     try {
-      await kanbanApi.moveCard({ taskId, targetColumnId: targetColId, sourceColumnId: sourceColId, newPosition });
+      const serverCard = await kanbanApi.moveCard({
+        taskId,
+        targetColumnId: targetColId,
+        sourceColumnId: sourceColId,
+        newPosition,
+      });
+
+      // Patch only the moved task with canonical server data (status, updatedAt…)
+      set((state) => ({
+        movingTaskIds: new Set([...state.movingTaskIds].filter((id) => id !== taskId)),
+        columns: state.columns.map((col) => {
+          if (col.id !== targetColId) return col;
+          return {
+            ...col,
+            tasks: col.tasks.map((t) =>
+              t.id === taskId
+                ? { ...t, ...serverCard, boardColumnId: targetColId }
+                : t
+            ),
+          };
+        }),
+      }));
     } catch (err: any) {
       // Rollback on failure
-      set({ columns: snapshot });
-      console.error('Move failed — rolled back:', err);
+      set((state) => ({
+        columns: snapshot,
+        movingTaskIds: new Set([...state.movingTaskIds].filter((id) => id !== taskId)),
+      }));
+      console.error('[Kanban] Move failed — rolled back:', err);
     }
+  },
+
+  // ── Apply a real-time move from another user (WebSocket) ──────────────
+  applyRemoteMove: (taskId, sourceColId, targetColId, newPosition, serverCard) => {
+    // Don't apply if we are currently moving this task ourselves
+    if (get().movingTaskIds.has(taskId)) return;
+
+    set((state) => ({
+      columns: applyMoveToColumns(
+        state.columns,
+        taskId,
+        sourceColId,
+        targetColId,
+        newPosition,
+        serverCard,
+      ),
+    }));
   },
 
   // ── Quick-add a card to a column ─────────────────────────────────────
@@ -139,7 +242,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
       }));
       return newTask;
     } catch (err) {
-      console.error('Quick-add failed:', err);
+      console.error('[Kanban] Quick-add failed:', err);
       return null;
     }
   },
@@ -147,19 +250,22 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   // ── Delete a task ─────────────────────────────────────────────────────
   deleteTask: async (taskId) => {
     const snapshot = get().columns;
-    // Optimistic remove
     set((state) => ({
       columns: state.columns.map((col) => {
         const has = col.tasks.some((t) => t.id === taskId);
         if (!has) return col;
-        return { ...col, tasks: col.tasks.filter((t) => t.id !== taskId), taskCount: col.taskCount - 1 };
+        return {
+          ...col,
+          tasks: col.tasks.filter((t) => t.id !== taskId),
+          taskCount: Math.max(0, col.taskCount - 1),
+        };
       }),
     }));
     try {
       await kanbanApi.deleteTask(taskId);
     } catch (err) {
       set({ columns: snapshot });
-      console.error('Delete failed — rolled back:', err);
+      console.error('[Kanban] Delete failed — rolled back:', err);
     }
   },
 
@@ -172,6 +278,9 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   // ── Derived: apply filters to columns ────────────────────────────────
   getFilteredColumns: () => {
     const { columns, filters } = get();
+    if (!filters.search && !filters.priority && !filters.assigneeId && !filters.labelId) {
+      return columns; // fast path — no filters active
+    }
     return columns.map((col) => ({
       ...col,
       tasks: col.tasks.filter((task) => {
@@ -191,9 +300,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     if (!col) return [];
     const tasks = col.tasks;
 
-    if (swimlaneMode === 'none') {
-      return [{ id: 'all', label: '', tasks }];
-    }
+    if (swimlaneMode === 'none') return [{ id: 'all', label: '', tasks }];
 
     if (swimlaneMode === 'priority') {
       const order = ['highest', 'high', 'medium', 'low', 'lowest'];

@@ -111,7 +111,8 @@ __all__ = [
     "ReportFrequency", "ExportFormat", "RetentionTier",
     # HR & Tenant & Calendar & Document
     "Tenant", "TenantStatus",
-    "Candidate", "Intern", "LeaveRequest", "ApprovalStatus", "InternStatus",
+    "Candidate", "Intern", "LeaveRequest", "TerminationRequest",
+    "ApprovalStatus", "InternStatus",
     "CalendarEvent", "CalendarEventType",
     "Document", "TaskFile", "DocumentStatus",
     # Support System
@@ -130,7 +131,10 @@ from app.models.analytics import (  # noqa: E402
 )
 
 from app.models.tenant import Tenant, TenantStatus
-from app.models.hr_records import Candidate, Intern, LeaveRequest, ApprovalStatus, InternStatus
+from app.models.hr_records import (
+    Candidate, Intern, LeaveRequest, TerminationRequest,
+    ApprovalStatus, InternStatus,
+)
 from app.models.calendar import CalendarEvent, CalendarEventType
 from app.models.document import Document, TaskFile, DocumentStatus
 

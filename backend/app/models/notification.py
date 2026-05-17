@@ -51,6 +51,10 @@ class NotificationType(str, PyEnum):
     LEAVE_APPROVED = "leave_approved"
     LEAVE_REJECTED = "leave_rejected"
 
+    # General system / HR
+    SYSTEM_ALERT = "system_alert"
+    HR_ACTION = "hr_action"
+
 class NotificationChannel(str, PyEnum):
     """Notification channel enumeration."""
 

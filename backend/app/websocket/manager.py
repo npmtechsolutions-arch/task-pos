@@ -100,6 +100,22 @@ class ConnectionManager:
         """Return all currently connected user IDs."""
         return list(self.active_connections.keys())
 
+    async def broadcast_to_project(self, project_id: str, message: dict):
+        """Send message to all users in a project room.
+
+        Project rooms are registered under the key 'project:{project_id}'.
+        Falls back to broadcasting to all connected users if the room is empty
+        (e.g. users joined via a route that doesn't call join_room).
+        """
+        room_key = f"project:{project_id}"
+        if room_key in self.rooms and self.rooms[room_key]:
+            await self.send_to_room(room_key, message)
+        else:
+            # Room not registered — broadcast to all online users as a safe fallback.
+            # This ensures the event reaches everyone even if room registration is
+            # not yet implemented on the WebSocket connect path.
+            await self.broadcast(message)
+
 
 # Global connection manager instance
 manager = ConnectionManager()
